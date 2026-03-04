@@ -119,14 +119,6 @@ export interface Config<
   onError?: null | ((error: unknown) => void);
 
   /**
-   * Called when a remote update (from another tab) fails validation.
-   * Invoked before the error is thrown. Use this to trigger a page refresh
-   * or other recovery action. Note: state may briefly contain invalid data.
-   * @param state - The invalid state data received
-   * @param sliceKey - The slice key if a specific slice failed, undefined for root state
-   */
-  onRemoteUpdateValidationFail?: null | ((state: unknown, sliceKey?: TSlices[number]['key']) => void);
-  /**
    * Called when stored data fails validation during initialization.
    * Invoked before falling back to initial state. The invalid data will be
    * discarded and replaced with initial values.
@@ -134,6 +126,14 @@ export interface Config<
    * @param sliceKey - The slice key if a specific slice failed, undefined for root state
    */
   onStorageValidationFail?: null | ((state: unknown, sliceKey?: TSlices[number]['key']) => void);
+  /**
+   * Called when a remote update (from another tab) fails validation.
+   * Invoked before the error is thrown. Use this to trigger a page refresh
+   * or other recovery action. Note: state may briefly contain invalid data.
+   * @param state - The invalid state data received
+   * @param sliceKey - The slice key if a specific slice failed, undefined for root state
+   */
+  onRemoteUpdateValidationFail?: null | ((state: unknown, sliceKey?: TSlices[number]['key']) => void);
 }
 
 //
@@ -243,8 +243,8 @@ export class State<
       onWarn: null,
       onError: null,
 
-      onRemoteUpdateValidationFail: null,
       onStorageValidationFail: null,
+      onRemoteUpdateValidationFail: null,
 
       ...config
     };
@@ -540,6 +540,7 @@ export class State<
 
       const sliceData = current[slice.key];
       if (sliceData !== undefined && !slice.validate(sliceData)) {
+        slice.onRemoteUpdateValidationFail?.(sliceData);
         this.config.onRemoteUpdateValidationFail?.(sliceData, slice.key);
         throw new Error(`[${this.config.name}] Remote update failed validation for slice "${slice.key}"`);
       }

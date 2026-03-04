@@ -24,7 +24,9 @@ export interface SliceConfig<
   /** Optional validation function. Returns true if state structure is valid. */
   validate?: (state: unknown) => boolean;
   /** Called when stored data fails validation (before falling back to initial state). */
-  onStorageValidationFail?: (data: unknown) => void;
+  onStorageValidationFail?: (state: unknown) => void;
+  /** Called when remote update fails validation (before throwing error). */
+  onRemoteUpdateValidationFail?: (state: unknown) => void;
 }
 
 //
@@ -70,5 +72,6 @@ export function createSlice<
     actions: config.actions ?? {} as TActions,
     validate: config.validate,
     onStorageValidationFail: config.onStorageValidationFail,
+    onRemoteUpdateValidationFail: config.onRemoteUpdateValidationFail,
   };
 }

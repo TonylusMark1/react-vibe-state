@@ -50,6 +50,8 @@ export interface Slice<
   readonly validate?: (state: unknown) => boolean;
   /** Callback when stored data fails validation */
   readonly onStorageValidationFail?: (state: unknown) => void;
+  /** Callback when remote update fails validation */
+  readonly onRemoteUpdateValidationFail?: (state: unknown) => void;
 }
 
 /**

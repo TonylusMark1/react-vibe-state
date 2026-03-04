@@ -26,7 +26,7 @@ export interface User {
 //
 
 /**
- * Users slice — demonstration of Record<number, T> management with dynamic keys.
+ * Users slice - demonstration of Record<number, T> management with dynamic keys.
  */
 export default RVS.createSlice({
   key: 'users',

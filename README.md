@@ -1,0 +1,301 @@
+# 🌊 react-vibe-state
+
+Reactive state management with **automatic persistence** and **cross-tab synchronization**. Use state like a plain JavaScript object - persistence and sync happen transparently in the background.
+
+## Features
+
+- **Zero-config persistence** - state automatically saved to IndexedDB
+- **Cross-tab sync** - changes instantly propagate between browser tabs via BroadcastChannel
+- **Reactive** - powered by Valtio proxy, React components re-render on relevant changes only
+- **Type-safe** - full TypeScript support with inferred types for state, selectors, and actions
+- **Modular** - organize state with slices, each with own selectors and actions
+- **Conflict-free** - CRDT-based sync via Yjs handles concurrent edits gracefully
+
+**Under the hood:**
+
+- [Valtio](https://github.com/pmndrs/valtio) - reactive proxy-based state
+- [Yjs](https://github.com/yjs/yjs) - CRDT for conflict-free merging
+- [y-indexeddb](https://github.com/yjs/y-indexeddb) - IndexedDB persistence provider
+- [y-webrtc](https://github.com/yjs/y-webrtc) - BroadcastChannel sync (WebRTC disabled)
+
+## Installation
+
+```bash
+npm install react-vibe-state
+```
+
+**Peer dependency:** React 18 or 19
+
+## Quick Start
+
+```tsx
+import { createState } from 'react-vibe-state';
+
+// Create state (singleton, typically in a separate file)
+const appState = createState({
+  name: 'app',
+  initial: { count: 0 },
+  actions: {
+    increment() { this.count++; },
+    decrement() { this.count--; },
+  },
+});
+
+// Use in React component
+function Counter() {
+  const { state } = appState.useSnapshot();
+  
+  return (
+    <div>
+      <span>{state.count}</span>
+      <button onClick={appState.actions.increment}>+</button>
+      <button onClick={appState.actions.decrement}>-</button>
+    </div>
+  );
+}
+```
+
+Open the app in multiple tabs - counter stays in sync automatically.
+
+## API Reference
+
+### `createState(config)`
+
+Creates a reactive state instance. Instances are cached by name (safe for HMR).
+
+```ts
+const state = createState({
+  name: 'my-state',
+  initial: { /* ... */ },
+  selectors: { /* ... */ },
+  actions: { /* ... */ },
+  slices: [ /* ... */ ],
+  // ... options
+});
+```
+
+#### Config Options
+
+
+| Option                         | Type                         | Default        | Description                                              |
+| ------------------------------ | ---------------------------- | -------------- | -------------------------------------------------------- |
+| `name`                         | `string`                     | *required*     | Unique identifier (letters, numbers, `_`, `-`)           |
+| `initial`                      | `T \| () => T`               | *required*     | Initial state object or factory function |
+| `selectors`                    | `object`                     | `{}`           | Methods for derived values (`this` = readonly state)     |
+| `actions`                      | `object`                     | `{}`           | Methods for mutations (`this` = mutable state)           |
+| `slices`                       | `Slice[]`                    | `[]`           | Array of slices created with `createSlice()`             |
+| `persistAndSync`               | `boolean`                    | `true`         | Enable in browser storage persistence and cross-tab sync |
+| `storage`                      | `"indexed-db"`               | `"indexed-db"` | Storage backend                                          |
+| `readyTimeout`                 | `number`                     | `5000`         | Max ms to wait for storage initialization                |
+| `generation`                   | `string \| null`             | `null`         | Version identifier; changing it purges old data |
+| `validate`                     | `(state) => boolean`         | `null`         | Validation function for state structure                  |
+| `validateOnRemoteUpdate`       | `boolean`                    | `false`        | Validate state after cross-tab updates                   |
+| `onReady`                      | `() => void`                 | `null`         | Called when initialization completes                     |
+| `onError`                      | `(error) => void`            | `null`         | Called on initialization failure                         |
+| `onStorageValidationFail`      | `(state, sliceKey?) => void` | `null`         | Called when stored data fails validation                 |
+| `onRemoteUpdateValidationFail` | `(state, sliceKey?) => void` | `null`         | Called before throwing on invalid remote update          |
+
+
+#### Returned State Instance
+
+**Properties:**
+
+
+| Property    | Type                   | Description                                                  |
+| ----------- | ---------------------- | ------------------------------------------------------------ |
+| `state`     | `TRootState & TSlices` | Mutable proxy - read/write directly or via selectors/actions |
+| `selectors` | `object`               | Bound selector methods (`this` = readonly state)             |
+| `actions`   | `object`               | Bound action methods (`this` = mutable state)                |
+| `ready`     | `Promise<void>`        | Resolves when persistence is loaded                          |
+| `isReady`   | `boolean`              | Whether initialization completed                             |
+| `storage`   | `"indexed-db" \| undefined` | Used storage type or `undefined` if disabled |
+
+
+**Methods:**
+
+
+| Method                  | Description                                                  |
+| ----------------------- | ------------------------------------------------------------ |
+| `useSnapshot()`         | React hook returning `{ state, selectors }`                  |
+| `useSnapshot(sliceKey)` | React hook scoped to a specific slice `{ state, selectors }` |
+| `reset()`               | Reset entire state to initial values                         |
+| `reset(sliceKey)`       | Reset specific slice to initial values                       |
+
+
+### `createSlice(config)`
+
+Creates a modular slice of state with its own selectors and actions.
+
+```ts
+const todosSlice = createSlice({
+  key: 'todos',
+  initial: { items: [], filter: 'all' },
+  selectors: {
+    filtered() {
+      return this.filter === 'all' 
+        ? this.items 
+        : this.items.filter(t => t.status === this.filter);
+    },
+  },
+  actions: {
+    add(text: string) {
+      this.items.push({ id: Date.now(), text, status: 'active' });
+    },
+  },
+});
+
+// Use in createState
+const appState = createState({
+  name: 'app',
+  initial: {},
+  slices: [todosSlice],
+});
+
+// Access slice
+appState.state.todos.items;
+appState.actions.todos.add('Buy milk');
+appState.selectors.todos.filtered();
+```
+
+#### Slice Config Options
+
+
+| Option                         | Type                 | Default     | Description                                        |
+| ------------------------------ | -------------------- | ----------- | -------------------------------------------------- |
+| `key`                          | `string`             | *required*  | Unique identifier (becomes property on root state) |
+| `initial`                      | `T \| () => T`       | *required*  | Initial slice state object or factory function |
+| `selectors`                    | `object`             | `{}`        | Slice-scoped selectors (`this` = slice state)      |
+| `actions`                      | `object`             | `{}`        | Slice-scoped actions (`this` = slice state)        |
+| `validate`                     | `(state) => boolean` | `undefined` | Slice-specific validation                          |
+| `onStorageValidationFail`      | `(state) => void`    | `undefined` | Called when slice storage validation fails         |
+| `onRemoteUpdateValidationFail` | `(state) => void`    | `undefined` | Called when slice remote update validation fails   |
+
+
+### `useSnapshot(state)` / `useSnapshot(state, sliceKey)`
+
+Standalone hook alternative to `state.useSnapshot()`.
+
+```tsx
+import { useSnapshot } from 'react-vibe-state';
+
+function Component() {
+  const { state, selectors } = useSnapshot(appState);
+  // or scoped to slice:
+  const { state, selectors } = useSnapshot(appState, 'todos');
+}
+```
+
+## Validation & Recovery
+
+```ts
+const appState = createState({
+  name: 'app',
+  initial: { version: 1, data: [] },
+  
+  validate: (state) => {
+    return typeof state.version === 'number' && Array.isArray(state.data);
+  },
+  
+  validateOnRemoteUpdate: true,
+  
+  onRemoteUpdateValidationFail: () => {
+    // Remote tab sent invalid data - reload to recover
+    location.reload();
+  },
+  
+  onStorageValidationFail: (invalidData) => {
+    console.warn('Stored data invalid, using initial state', JSON.stringify(invalidData));
+  },
+});
+```
+
+**Validation behavior:**
+
+- **Initial state** - throws if invalid (fix your code)
+- **Stored data** - falls back to initial if invalid
+- **Remote updates** (`validateOnRemoteUpdate` is `true`) - throws if invalid
+
+## Generation (Schema Versioning)
+
+When your state schema changes incompatibly, change the `generation` to purge old data:
+
+```ts
+const appState = createState({
+  name: 'app',
+  generation: 'v2', // Changed from 'v1' - old data will be deleted
+  initial: { /* new schema */ },
+});
+```
+
+## SSR / Server Components
+
+State works in SSR environments - persistence and sync are automatically disabled server-side. The `ready` promise resolves immediately.
+
+## TypeScript
+
+Full type inference for state, selectors, and actions:
+
+```ts
+interface User {
+  id: string;
+  name: string;
+  role: 'admin' | 'user';
+}
+
+interface UsersState {
+  list: User[];
+  selectedId?: string;
+}
+
+const usersSlice = createSlice({
+  key: 'users',
+  initial: { list: [], selectedId: undefined } as UsersState,
+  selectors: {
+    selected() {
+      return this.list.find(u => u.id === this.selectedId);
+    },         // ^? User | undefined
+    admins() {
+      return this.list.filter(u => u.role === 'admin');
+    },         // ^? User[]
+  },
+  actions: {
+    add(user: User) {
+      this.list.push(user);
+    },
+    select(id: string | undefined) {
+      this.selectedId = id;
+    },
+  },
+});
+
+interface AppState {
+  theme: 'dark' | 'light';
+}
+
+const appState = createState({
+  name: 'app',
+  initial: { theme: 'dark' } as AppState,
+  slices: [usersSlice],
+});
+
+// All types are inferred
+appState.state.theme;                   // 'dark' | 'light'
+appState.state.users.list;              // User[]
+appState.selectors.users.selected();    // User | undefined
+appState.actions.users.add(user);       // add requires (user: User) => void
+```
+
+## Browser Support
+
+Requires IndexedDB and BroadcastChannel support. Works in all modern browsers. For older browsers without `indexedDB.databases()` API, an error is thrown - you can conditionally disable persistence:
+
+```ts
+createState({
+  persistAndSync: typeof indexedDB?.databases === 'function',
+  // ...
+});
+```
+
+## License
+
+ISC

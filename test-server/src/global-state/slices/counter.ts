@@ -12,7 +12,7 @@ export interface Slice {
 //
 
 /**
- * Counter slice — demonstration of basic state management and synchronization.
+ * Counter slice - demonstration of basic state management and synchronization.
  */
 export default RVS.createSlice({
   key: 'counter',

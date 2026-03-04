@@ -17,7 +17,7 @@ export interface Message {
 //
 
 /**
- * Messages slice — demonstration of real-time messaging between tabs.
+ * Messages slice - demonstration of real-time messaging between tabs.
  */
 export default RVS.createSlice({
   key: 'messages',

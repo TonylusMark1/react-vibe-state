@@ -20,7 +20,7 @@ export interface Todo {
 //
 
 /**
- * Todos slice — demonstration of array management and filtering.
+ * Todos slice - demonstration of array management and filtering.
  */
 export default RVS.createSlice({
   key: 'todos',
