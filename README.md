@@ -80,14 +80,14 @@ const state = createState({
 | Option                         | Type                         | Default        | Description                                              |
 | ------------------------------ | ---------------------------- | -------------- | -------------------------------------------------------- |
 | `name`                         | `string`                     | *required*     | Unique identifier (letters, numbers, `_`, `-`)           |
-| `initial`                      | `T \| () => T`               | *required*     | Initial state object or factory function |
+| `initial`                      | `T | () => T`                | *required*     | Initial state object or factory function                 |
 | `selectors`                    | `object`                     | `{}`           | Methods for derived values (`this` = readonly state)     |
 | `actions`                      | `object`                     | `{}`           | Methods for mutations (`this` = mutable state)           |
 | `slices`                       | `Slice[]`                    | `[]`           | Array of slices created with `createSlice()`             |
 | `persistAndSync`               | `boolean`                    | `true`         | Enable in browser storage persistence and cross-tab sync |
 | `storage`                      | `"indexed-db"`               | `"indexed-db"` | Storage backend                                          |
 | `readyTimeout`                 | `number`                     | `5000`         | Max ms to wait for storage initialization                |
-| `generation`                   | `string \| null`             | `null`         | Version identifier; changing it purges old data |
+| `generation`                   | `string | null`              | `null`         | Version identifier; changing it purges old data          |
 | `validate`                     | `(state) => boolean`         | `null`         | Validation function for state structure                  |
 | `validateOnRemoteUpdate`       | `boolean`                    | `false`        | Validate state after cross-tab updates                   |
 | `onReady`                      | `() => void`                 | `null`         | Called when initialization completes                     |
@@ -101,14 +101,14 @@ const state = createState({
 **Properties:**
 
 
-| Property    | Type                   | Description                                                  |
-| ----------- | ---------------------- | ------------------------------------------------------------ |
-| `state`     | `TRootState & TSlices` | Mutable proxy - read/write directly or via selectors/actions |
-| `selectors` | `object`               | Bound selector methods (`this` = readonly state)             |
-| `actions`   | `object`               | Bound action methods (`this` = mutable state)                |
-| `ready`     | `Promise<void>`        | Resolves when persistence is loaded                          |
-| `isReady`   | `boolean`              | Whether initialization completed                             |
-| `storage`   | `"indexed-db" \| undefined` | Used storage type or `undefined` if disabled |
+| Property    | Type                       | Description                                                  |
+| ----------- | -------------------------- | ------------------------------------------------------------ |
+| `state`     | `TRootState & TSlices`     | Mutable proxy - read/write directly or via selectors/actions |
+| `selectors` | `object`                   | Bound selector methods (`this` = readonly state)             |
+| `actions`   | `object`                   | Bound action methods (`this` = mutable state)                |
+| `ready`     | `Promise<void>`            | Resolves when persistence is loaded                          |
+| `isReady`   | `boolean`                  | Whether initialization completed                             |
+| `storage`   | `"indexed-db" | undefined` | Used storage type or `undefined` if disabled                 |
 
 
 **Methods:**
@@ -163,7 +163,7 @@ appState.selectors.todos.filtered();
 | Option                         | Type                 | Default     | Description                                        |
 | ------------------------------ | -------------------- | ----------- | -------------------------------------------------- |
 | `key`                          | `string`             | *required*  | Unique identifier (becomes property on root state) |
-| `initial`                      | `T \| () => T`       | *required*  | Initial slice state object or factory function |
+| `initial`                      | `T | () => T`        | *required*  | Initial slice state object or factory function     |
 | `selectors`                    | `object`             | `{}`        | Slice-scoped selectors (`this` = slice state)      |
 | `actions`                      | `object`             | `{}`        | Slice-scoped actions (`this` = slice state)        |
 | `validate`                     | `(state) => boolean` | `undefined` | Slice-specific validation                          |
@@ -295,6 +295,27 @@ createState({
   // ...
 });
 ```
+
+## Demo App
+
+> **Note:** Demo app is only available in the [GitHub repository](https://github.com/TonylusMark1/react-vibe-state), not in the npm package.
+
+The `test-server/` directory contains a demo application showcasing all library features:
+
+- **Counter** - basic counter state
+- **Todos** - array management with filtering
+- **Messages** - real-time message sync
+- **Users** - complex slice with selectors
+
+```bash
+# Install dependencies
+npm install
+
+# Run demo app
+npm run dev
+```
+
+Open the app in multiple browser tabs to see cross-tab synchronization in action.
 
 ## License
 
