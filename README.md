@@ -35,6 +35,10 @@ import { createState } from 'react-vibe-state';
 const appState = createState({
   name: 'app',
   initial: { count: 0 },
+  selectors: {
+    isPositive() { return this.count > 0; },
+    doubled() { return this.count * 2; },
+  },
   actions: {
     increment() { this.count++; },
     decrement() { this.count--; },
@@ -43,13 +47,13 @@ const appState = createState({
 
 // Use in React component
 function Counter() {
-  const { state } = appState.useSnapshot();
+  const { state, selectors, actions } = appState.useSnapshot();
   
   return (
     <div>
-      <span>{state.count}</span>
-      <button onClick={appState.actions.increment}>+</button>
-      <button onClick={appState.actions.decrement}>-</button>
+      <span>{state.count} (doubled: {selectors.doubled()})</span>
+      <button onClick={actions.increment}>+</button>
+      <button onClick={actions.decrement} disabled={!selectors.isPositive()}>-</button>
     </div>
   );
 }
@@ -69,7 +73,7 @@ const state = createState({
   initial: { /* ... */ },
   selectors: { /* ... */ },
   actions: { /* ... */ },
-  slices: [ /* ... */ ],
+  slices: { /* key: slice, ... */ },
   // ... options
 });
 ```
@@ -83,7 +87,7 @@ const state = createState({
 | `initial`                      | `T | () => T`                | *required*     | Initial state object or factory function                 |
 | `selectors`                    | `object`                     | `{}`           | Methods for derived values (`this` = readonly state)     |
 | `actions`                      | `object`                     | `{}`           | Methods for mutations (`this` = mutable state)           |
-| `slices`                       | `Slice[]`                    | `[]`           | Array of slices created with `createSlice()`             |
+| `slices`                       | `{ [key]: Slice }`           | `{}`           | Object of slices created with `createSlice()`            |
 | `persistAndSync`               | `boolean`                    | `true`         | Enable in browser storage persistence and cross-tab sync |
 | `storage`                      | `"indexed-db"`               | `"indexed-db"` | Storage backend                                          |
 | `readyTimeout`                 | `number`                     | `5000`         | Max ms to wait for storage initialization                |
@@ -116,8 +120,8 @@ const state = createState({
 
 | Method                  | Description                                                  |
 | ----------------------- | ------------------------------------------------------------ |
-| `useSnapshot()`         | React hook returning `{ state, selectors }`                  |
-| `useSnapshot(sliceKey)` | React hook scoped to a specific slice `{ state, selectors }` |
+| `useSnapshot()`         | React hook returning `{ state, selectors, actions }`                  |
+| `useSnapshot(sliceKey)` | React hook scoped to a specific slice `{ state, selectors, actions }` |
 | `reset()`               | Reset entire state to initial values                         |
 | `reset(sliceKey)`       | Reset specific slice to initial values                       |
 
@@ -128,7 +132,6 @@ Creates a modular slice of state with its own selectors and actions.
 
 ```ts
 const todosSlice = createSlice({
-  key: 'todos',
   initial: { items: [], filter: 'all' },
   selectors: {
     filtered() {
@@ -148,7 +151,7 @@ const todosSlice = createSlice({
 const appState = createState({
   name: 'app',
   initial: {},
-  slices: [todosSlice],
+  slices: { todos: todosSlice },
 });
 
 // Access slice
@@ -160,15 +163,14 @@ appState.selectors.todos.filtered();
 #### Slice Config Options
 
 
-| Option                         | Type                 | Default     | Description                                        |
-| ------------------------------ | -------------------- | ----------- | -------------------------------------------------- |
-| `key`                          | `string`             | *required*  | Unique identifier (becomes property on root state) |
-| `initial`                      | `T | () => T`        | *required*  | Initial slice state object or factory function     |
-| `selectors`                    | `object`             | `{}`        | Slice-scoped selectors (`this` = slice state)      |
-| `actions`                      | `object`             | `{}`        | Slice-scoped actions (`this` = slice state)        |
-| `validate`                     | `(state) => boolean` | `undefined` | Slice-specific validation                          |
-| `onStorageValidationFail`      | `(state) => void`    | `undefined` | Called when slice storage validation fails         |
-| `onRemoteUpdateValidationFail` | `(state) => void`    | `undefined` | Called when slice remote update validation fails   |
+| Option                         | Type                 | Default     | Description                                      |
+| ------------------------------ | -------------------- | ----------- | ------------------------------------------------ |
+| `initial`                      | `T | () => T`        | *required*  | Initial slice state object or factory function   |
+| `selectors`                    | `object`             | `{}`        | Slice-scoped selectors (`this` = slice state)    |
+| `actions`                      | `object`             | `{}`        | Slice-scoped actions (`this` = slice state)      |
+| `validate`                     | `(state) => boolean` | `undefined` | Slice-specific validation                        |
+| `onStorageValidationFail`      | `(state) => void`    | `undefined` | Called when slice storage validation fails       |
+| `onRemoteUpdateValidationFail` | `(state) => void`    | `undefined` | Called when slice remote update validation fails |
 
 
 ### `useSnapshot(state)` / `useSnapshot(state, sliceKey)`
@@ -179,11 +181,13 @@ Standalone hook alternative to `state.useSnapshot()`.
 import { useSnapshot } from 'react-vibe-state';
 
 function Component() {
-  const { state, selectors } = useSnapshot(appState);
+  const { state, selectors, actions } = useSnapshot(appState);
   // or scoped to slice:
-  const { state, selectors } = useSnapshot(appState, 'todos');
+  const { state, selectors, actions } = useSnapshot(appState, 'todos');
 }
 ```
+
+> **Note on `actions`:** Actions are included in `useSnapshot()` for convenience, even though semantically they don't operate on the snapshot. Actions always mutate the actual state (not the snapshot), and these mutations trigger reactivity updates across all subscribers.
 
 ## Validation & Recovery
 
@@ -248,7 +252,6 @@ interface UsersState {
 }
 
 const usersSlice = createSlice({
-  key: 'users',
   initial: { list: [], selectedId: undefined } as UsersState,
   selectors: {
     selected() {
@@ -275,7 +278,7 @@ interface AppState {
 const appState = createState({
   name: 'app',
   initial: { theme: 'dark' } as AppState,
-  slices: [usersSlice],
+  slices: { users: usersSlice },
 });
 
 // All types are inferred

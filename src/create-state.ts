@@ -5,7 +5,7 @@ import type * as Types from './types';
 
 //
 
-const cache = new Map<string, AnyState>();
+const cache: Map<string, AnyState> = (globalThis as any).__REACT_VIBE_STATE_CACHE__ ??= new Map();
 
 //
 
@@ -31,7 +31,7 @@ const cache = new Map<string, AnyState>();
  *     increment() { this.count++; },
  *     setUser(user) { this.user = user; }
  *   },
- *   slices: [usersSlice, todosSlice]
+ *   slices: { users: usersSlice, todos: todosSlice }
  * });
  * ```
  */
@@ -39,17 +39,37 @@ export function createState<
   TRootState extends object,
   TGlobalSelectors extends Types.ApiMethods<TRootState> = {},
   TGlobalActions extends Types.ApiMethods<TRootState> = {},
-  TSlices extends readonly Types.AnySlice[] = []
+  TSlices extends Types.SlicesRecord = {}
 >(
   config: Config<TRootState, TGlobalSelectors, TGlobalActions, TSlices>
 ): State<TRootState, TGlobalSelectors, TGlobalActions, TSlices> {
   const cached = cache.get(config.name);
 
   if (cached) {
-    const message = `State "${config.name}" already exists, returning cached instance. You may want to reload the page.`;
+    if (Utils.isBrowser && (import.meta as any).hot) {
+      const generationChanged = config.generation !== undefined && cached.generation !== config.generation;
 
-    if (Utils.isBrowser && (import.meta as any).hot)
-      console.warn(message);
+      //
+
+      const consoleWarnHeader = `HMR, react-vibe-state, state "${config.name}":`;
+      const consoleWarnBody = `- State will use cached instance, config changes won't apply.`;
+      const consoleWarnFooter = `- You may want to reload the page.`;
+
+      if (generationChanged) {
+        const consoleWarnBodyExtra = `- Generation changed (${cached.generation} → ${config.generation}), but cached version is still using old.`;
+
+        console.warn(
+          `%c${consoleWarnHeader}\n%c${consoleWarnBody}\n${consoleWarnBodyExtra}\n${consoleWarnFooter}`,
+          'font-weight: bold', ''
+        );
+      }
+      else {
+        console.warn(
+          `%c${consoleWarnHeader}\n%c${consoleWarnBody}\n${consoleWarnFooter}`,
+          'font-weight: bold', ''
+        );
+      }
+    }
     
     return cached;
   }

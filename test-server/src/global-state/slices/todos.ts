@@ -23,8 +23,6 @@ export interface Todo {
  * Todos slice - demonstration of array management and filtering.
  */
 export default RVS.createSlice({
-  key: 'todos',
-
   initial: (): Slice => ({
     items: [],
     filter: 'all',

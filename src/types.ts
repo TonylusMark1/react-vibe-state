@@ -33,13 +33,10 @@ export interface ApiMethods<TState extends object> {
  * Type representing a slice definition created by `createSlice()`.
  */
 export interface Slice<
-  TKey extends string = string,
   TState extends object = object,
   TSelectors extends ApiMethods<TState> = {},
   TActions extends ApiMethods<TState> = {}
 > {
-  /** Unique identifier for the slice */
-  readonly key: TKey;
   /** Initial state value or factory function */
   readonly initial: TState | (() => TState);
   /** Selector methods for deriving values */
@@ -57,7 +54,12 @@ export interface Slice<
 /**
  * Any slice type.
  */
-export type AnySlice = Slice<any, any, any, any>;
+export type AnySlice = Slice<any, any, any>;
+
+/**
+ * Record of slices keyed by their identifier.
+ */
+export type SlicesRecord = Record<string, AnySlice>;
 
 /**
  * Infers state type from a single slice.
@@ -76,13 +78,13 @@ export type BoundApi<TApi extends Record<string, (...args: any[]) => any>> = {
  * Unified mapped type for extracting slice data by property.
  */
 export type MapSlices<
-  TSlices extends readonly AnySlice[],
+  TSlices extends SlicesRecord,
   TExtract extends 'state' | 'selectors' | 'actions'
 > = {
-  [S in TSlices[number] as S['key']]: 
-    TExtract extends 'state' ? InferSliceState<S> :
-    TExtract extends 'selectors' ? BoundApi<S['selectors']> :
-    BoundApi<S['actions']>;
+  [K in keyof TSlices]: 
+    TExtract extends 'state' ? InferSliceState<TSlices[K]> :
+    TExtract extends 'selectors' ? BoundApi<TSlices[K]['selectors']> :
+    BoundApi<TSlices[K]['actions']>;
 };
 
 /**
@@ -91,7 +93,7 @@ export type MapSlices<
  */
 export type InferStateFromSlices<
   TRootState extends object,
-  TSlices extends readonly AnySlice[]
+  TSlices extends SlicesRecord
 > = TRootState & MapSlices<TSlices, 'state'>;
 
 /**
@@ -99,6 +101,6 @@ export type InferStateFromSlices<
  */
 export type InferApi<
   TGlobalApi extends ApiMethods<any>,
-  TSlices extends readonly AnySlice[],
+  TSlices extends SlicesRecord,
   TKind extends 'selectors' | 'actions'
 > = BoundApi<TGlobalApi> & MapSlices<TSlices, TKind>;

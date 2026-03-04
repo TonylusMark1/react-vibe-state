@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import GlobalState from '@/src/global-state';
 
+import { CounterDetails } from './components/CounterDetails';
+
 import styles from './index.module.css';
 
 //
@@ -45,11 +47,7 @@ export const CounterDemo = React.memo(function CounterDemo() {
         </button>
       </div>
       
-      <div className={styles.stats}>
-        <div>Total increments: {snap.state.incrementCount}</div>
-        <div>Total decrements: {snap.state.decrementCount}</div>
-        <div>Last updated: {new Date(snap.state.lastUpdated).toLocaleTimeString()}</div>
-      </div>
+      <CounterDetails />
     </div>
   );
 });

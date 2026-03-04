@@ -8,13 +8,10 @@ import type * as Types from './types';
  * Configuration for creating a slice.
  */
 export interface SliceConfig<
-  TKey extends string,
   TState extends object,
   TSelectors extends Types.ApiMethods<TState> = {},
   TActions extends Types.ApiMethods<TState> = {}
 > {
-  /** Unique identifier for the slice. Becomes a property key on the root state. */
-  key: TKey;
   /** Initial state object, or a factory function that returns the initial state. */
   initial: TState | (() => TState);
   /** Selector methods for deriving values. `this` is bound to immutable snapshot (read-only). */
@@ -38,12 +35,11 @@ export interface SliceConfig<
  * Each slice has its own state, selectors, and actions scoped to that slice.
  * 
  * @param config - Slice configuration
- * @returns A Slice object to pass to createState's `slices` array
+ * @returns A Slice object to pass to createState's `slices` object
  * 
  * @example
  * ```ts
  * const usersSlice = createSlice({
- *   key: 'users',
  *   initial: { list: [], selectedId: null },
  *   selectors: {
  *     selectedUser() {
@@ -55,18 +51,23 @@ export interface SliceConfig<
  *     selectUser(id) { this.selectedId = id; }
  *   }
  * });
+ * 
+ * // Use in createState
+ * createState({
+ *   name: 'app',
+ *   initial: {},
+ *   slices: { users: usersSlice }
+ * });
  * ```
  */
 export function createSlice<
-  const TKey extends string,
   TState extends object,
   TSelectors extends Types.ApiMethods<TState> = {},
   TActions extends Types.ApiMethods<TState> = {}
 >(
-  config: SliceConfig<TKey, TState, TSelectors, TActions>
-): Types.Slice<TKey, TState, TSelectors, TActions> {
+  config: SliceConfig<TState, TSelectors, TActions>
+): Types.Slice<TState, TSelectors, TActions> {
   return {
-    key: config.key,
     initial: config.initial,
     selectors: config.selectors ?? {} as TSelectors,
     actions: config.actions ?? {} as TActions,

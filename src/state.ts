@@ -19,7 +19,7 @@ export interface Config<
   TRootState extends object,
   TGlobalSelectors extends Types.ApiMethods<TRootState> = {},
   TGlobalActions extends Types.ApiMethods<TRootState> = {},
-  TSlices extends readonly Types.AnySlice[] = []
+  TSlices extends Types.SlicesRecord = {}
 > {
   /**
    * Unique name identifying this state.
@@ -43,8 +43,8 @@ export interface Config<
    */
   actions?: TGlobalActions & ThisType<TRootState>;
   /**
-   * Array of slices created with `createSlice()` to include in the state.
-   * Each slice adds its state as a property keyed by the slice's key.
+   * Object of slices created with `createSlice()` to include in the state.
+   * Each slice adds its state as a property keyed by the object key.
    */
   slices?: TSlices;
   /**
@@ -125,7 +125,7 @@ export interface Config<
    * @param state - The invalid state data from storage
    * @param sliceKey - The slice key if a specific slice failed, undefined for root state
    */
-  onStorageValidationFail?: null | ((state: unknown, sliceKey?: TSlices[number]['key']) => void);
+  onStorageValidationFail?: null | ((state: unknown, sliceKey?: keyof TSlices) => void);
   /**
    * Called when a remote update (from another tab) fails validation.
    * Invoked before the error is thrown. Use this to trigger a page refresh
@@ -133,7 +133,7 @@ export interface Config<
    * @param state - The invalid state data received
    * @param sliceKey - The slice key if a specific slice failed, undefined for root state
    */
-  onRemoteUpdateValidationFail?: null | ((state: unknown, sliceKey?: TSlices[number]['key']) => void);
+  onRemoteUpdateValidationFail?: null | ((state: unknown, sliceKey?: keyof TSlices) => void);
 }
 
 //
@@ -172,7 +172,7 @@ export class State<
   TRootState extends object,
   TGlobalSelectors extends Types.ApiMethods<TRootState> = {},
   TGlobalActions extends Types.ApiMethods<TRootState> = {},
-  TSlices extends readonly Types.AnySlice[] = []
+  TSlices extends Types.SlicesRecord = {}
 > {
   private readonly config: Required<Config<TRootState, TGlobalSelectors, TGlobalActions, TSlices>>;
   private readonly key: string;
@@ -233,7 +233,7 @@ export class State<
 
       selectors: {} as TGlobalSelectors,
       actions: {} as TGlobalActions,
-      slices: [] as unknown as TSlices,
+      slices: {} as TSlices,
       generation: null,
 
       validate: null,
@@ -347,61 +347,80 @@ export class State<
     return this.activeStorage;
   }
 
+  /**
+   * The generation identifier used for cache invalidation.
+   */
+  get generation(): string | null {
+    return this.config.generation;
+  }
+
   //
 
   useSnapshot(): {
     state: Types.InferStateFromSlices<TRootState, TSlices>;
     selectors: Types.InferApi<TGlobalSelectors, TSlices, 'selectors'>;
+    actions: Types.InferApi<TGlobalActions, TSlices, 'actions'>;
   };
 
-  useSnapshot<const TSliceKey extends TSlices[number]['key']>(
+  useSnapshot<const TSliceKey extends keyof TSlices & string>(
     sliceKey: TSliceKey
   ): {
     state: Types.MapSlices<TSlices, 'state'>[TSliceKey];
     selectors: Types.MapSlices<TSlices, 'selectors'>[TSliceKey];
+    actions: Types.MapSlices<TSlices, 'actions'>[TSliceKey];
   };
 
   /**
-   * React hook that returns a reactive snapshot and selectors.
+   * React hook that returns a reactive snapshot, selectors, and actions.
    * 
    * The returned `state` is an immutable snapshot that triggers re-renders
    * when relevant parts change. The returned `selectors` have `this` bound
    * to the reactive snapshot for proper reactivity.
    * 
+   * Note: `actions` are included for convenience, but they operate on the
+   * actual mutable state (not the snapshot). This means calling an action
+   * will mutate the real state and trigger reactivity updates.
+   * 
    * @param sliceKey - Optional slice key to scope the snapshot to a specific slice
-   * @returns Object containing reactive `state` snapshot and bound `selectors`
+   * @returns Object containing reactive `state` snapshot, bound `selectors`, and `actions`
    * 
    * @example
    * ```tsx
    * // Full state
-   * const { state, selectors } = appState.useSnapshot();
+   * const { state, selectors, actions } = appState.useSnapshot();
    * 
    * // Specific slice only
-   * const { state, selectors } = appState.useSnapshot('users');
+   * const { state, selectors, actions } = appState.useSnapshot('users');
    * ```
    */
-  useSnapshot(sliceKey?: string): { state: any; selectors: any } {
+  useSnapshot(sliceKey?: string): { state: any; selectors: any; actions: any } {
     const snap = Valtio.useSnapshot(this.state);
     const snapRef = React.useRef(snap);
     snapRef.current = snap;
+
+    //
 
     const selectors = React.useMemo(() => {
       if (Utils.isServer)
         return this.selectors;
 
-      return this.buildReactiveSelectors(() => snapRef.current as any);
+      return this.buildSelectors(() => snapRef.current as any);
     }, [this]);
+
+    //
 
     if (sliceKey) {
       return {
         state: (snap as any)[sliceKey],
         selectors: (selectors as any)[sliceKey],
+        actions: (this.actions as any)[sliceKey],
       };
     }
 
     return {
       state: snap,
       selectors,
+      actions: this.actions,
     };
   }
 
@@ -421,14 +440,14 @@ export class State<
    * appState.reset('users');
    * ```
    */
-  reset(sliceKey?: TSlices[number]['key']): void {
+  reset(sliceKey?: keyof TSlices & string): void {
     if ( !this.isReadyFlag )
       throw new Error(`[${this.config.name}] Cannot reset State while it is not ready`);
 
     //
 
     if (sliceKey) {
-      const slice = this.config.slices.find(s => s.key === sliceKey);
+      const slice = this.config.slices[sliceKey];
 
       if (!slice)
         throw new Error(`[${this.config.name}] Slice "${sliceKey}" not found`);
@@ -445,16 +464,9 @@ export class State<
   private validateSliceKeys(): void {
     const rootKeys = new Set(Object.keys(Utils.resolveInitial(this.config.initial)));
 
-    const sliceKeys = new Set<string>();
-
-    for (const slice of this.config.slices) {
-      if (rootKeys.has(slice.key))
-        throw new Error(`[${this.config.name}] Slice key "${slice.key}" conflicts with root state property`);
-
-      if (sliceKeys.has(slice.key))
-        throw new Error(`[${this.config.name}] Duplicate slice key: "${slice.key}"`);
-
-      sliceKeys.add(slice.key);
+    for (const sliceKey of Object.keys(this.config.slices)) {
+      if (rootKeys.has(sliceKey))
+        throw new Error(`[${this.config.name}] Slice key "${sliceKey}" conflicts with root state property`);
     }
   }
 
@@ -468,18 +480,18 @@ export class State<
         throw new Error(`[${this.config.name}] Root initial state failed validation`);
     }
 
-    for (const slice of this.config.slices) {
+    for (const [sliceKey, slice] of Object.entries(this.config.slices)) {
       if (slice.validate) {
         const sliceInitial = Utils.resolveInitial(slice.initial);
 
         if (!slice.validate(sliceInitial))
-          throw new Error(`[${this.config.name}] Slice "${slice.key}" initial state failed validation`);
+          throw new Error(`[${this.config.name}] Slice "${sliceKey}" initial state failed validation`);
       }
     }
   }
 
   private validateAndApplyFromStorage(fromStorage: Record<string, unknown>): void {
-    const sliceKeys = new Set(this.config.slices.map(s => s.key));
+    const sliceKeys = new Set(Object.keys(this.config.slices));
 
     // Extract and validate root state (keys that are not slice keys)
     const rootFromStorage: Record<string, unknown> = {};
@@ -498,26 +510,26 @@ export class State<
       Object.assign(this.state, rootFromStorage);
 
     // Validate and apply each slice separately
-    for (const slice of this.config.slices) {
-      const sliceData = <Record<string, unknown>> fromStorage[slice.key];
+    for (const [sliceKey, slice] of Object.entries(this.config.slices)) {
+      const sliceData = <Record<string, unknown>> fromStorage[sliceKey];
 
       if (sliceData === undefined)
         continue;
 
       if (slice.validate && !slice.validate(sliceData)) {
-        this.ymap!.delete(slice.key);
+        this.ymap!.delete(sliceKey);
 
         slice.onStorageValidationFail?.(sliceData);
-        this.config.onStorageValidationFail?.(sliceData, slice.key);
+        this.config.onStorageValidationFail?.(sliceData, sliceKey);
       }
       else
-        (this.state as any)[slice.key] = sliceData;
+        (this.state as any)[sliceKey] = sliceData;
     }
   }
 
   private validateRemoteUpdate(): void {
     const current = this.ymap!.toJSON();
-    const sliceKeys = new Set(this.config.slices.map(s => s.key));
+    const sliceKeys = new Set(Object.keys(this.config.slices));
 
     // Validate root state
     if (this.config.validate) {
@@ -534,15 +546,15 @@ export class State<
     }
 
     // Validate each slice
-    for (const slice of this.config.slices) {
+    for (const [sliceKey, slice] of Object.entries(this.config.slices)) {
       if (!slice.validate)
         continue;
 
-      const sliceData = current[slice.key];
+      const sliceData = current[sliceKey];
       if (sliceData !== undefined && !slice.validate(sliceData)) {
         slice.onRemoteUpdateValidationFail?.(sliceData);
-        this.config.onRemoteUpdateValidationFail?.(sliceData, slice.key);
-        throw new Error(`[${this.config.name}] Remote update failed validation for slice "${slice.key}"`);
+        this.config.onRemoteUpdateValidationFail?.(sliceData, sliceKey);
+        throw new Error(`[${this.config.name}] Remote update failed validation for slice "${sliceKey}"`);
       }
     }
   }
@@ -554,8 +566,8 @@ export class State<
 
     const initial = structuredClone(resolvedInitial);
 
-    for (const slice of this.config.slices)
-      initial[slice.key] = this.buildSliceInitialState(slice);
+    for (const [sliceKey, slice] of Object.entries(this.config.slices))
+      initial[sliceKey] = this.buildSliceInitialState(slice);
 
     return initial;
   }
@@ -568,93 +580,78 @@ export class State<
   //
 
   /**
-   * Builds selectors with `this` bound to state proxy.
+   * Builds selectors with `this` bound to state proxy or snapshot getter.
+   * When stateGetter is provided, selectors are reactive (for useSnapshot hook).
    */
-  private buildSelectors(): Types.InferApi<TGlobalSelectors, TSlices, 'selectors'> {
+  private buildSelectors(
+    stateGetter?: () => Types.InferStateFromSlices<TRootState, TSlices>
+  ): Types.InferApi<TGlobalSelectors, TSlices, 'selectors'> {
     const selectors: Record<string, Function | Record<string, Function>> = {};
 
-    // Global selectors - bind to root state
+    // Global selectors
     for (const methodName of Object.keys(this.config.selectors ?? {})) {
-      selectors[methodName] = (...args: unknown[]) => {
-        return this.config.selectors[methodName].call(this.state, ...args);
-      };
+      if (stateGetter) {
+        selectors[methodName] = (...args: unknown[]) => {
+          return this.config.selectors[methodName].call(stateGetter(), ...args);
+        };
+      }
+      else {
+        selectors[methodName] = (...args: unknown[]) => {
+          return this.config.selectors[methodName].call(this.state, ...args);
+        };
+      }
     }
 
-    // Slice selectors - bind to slice state
-    for (const slice of this.config.slices) {
+    // Slice selectors
+    for (const [sliceKey, slice] of Object.entries(this.config.slices)) {
       const sliceSelectors: Record<string, Function> = {};
 
       for (const methodName of Object.keys(slice.selectors ?? {})) {
-        sliceSelectors[methodName] = (...args: unknown[]) => {
-          return slice.selectors[methodName].call((this.state as any)[slice.key], ...args);
-        };
+        if (stateGetter) {
+          sliceSelectors[methodName] = (...args: unknown[]) => {
+            return slice.selectors[methodName].call((stateGetter() as any)[sliceKey], ...args);
+          };
+        }
+        else {
+          sliceSelectors[methodName] = (...args: unknown[]) => {
+            return slice.selectors[methodName].call((this.state as any)[sliceKey], ...args);
+          };
+        }
       }
 
-      selectors[slice.key] = sliceSelectors;
+      selectors[sliceKey] = sliceSelectors;
     }
 
     return selectors as Types.InferApi<TGlobalSelectors, TSlices, 'selectors'>;
   }
 
   /**
-   * Builds actions with `this` bound to mutable state.
+   * Builds actions with `this` bound to mutable state proxy.
    */
   private buildActions(): Types.InferApi<TGlobalActions, TSlices, 'actions'> {
     const actions: Record<string, Function | Record<string, Function>> = {};
 
-    // Global actions - bind to root state
+    // Global actions
     for (const methodName of Object.keys(this.config.actions ?? {})) {
       actions[methodName] = (...args: unknown[]) => {
         return (this.config.actions as any)[methodName].call(this.state, ...args);
       };
     }
 
-    // Slice actions - bind to slice state
-    for (const slice of this.config.slices) {
+    // Slice actions
+    for (const [sliceKey, slice] of Object.entries(this.config.slices)) {
       const sliceActions: Record<string, Function> = {};
 
       for (const methodName of Object.keys(slice.actions ?? {})) {
         sliceActions[methodName] = (...args: unknown[]) => {
-          return slice.actions[methodName].call((this.state as any)[slice.key], ...args);
+          return slice.actions[methodName].call((this.state as any)[sliceKey], ...args);
         };
       }
 
-      actions[slice.key] = sliceActions;
+      actions[sliceKey] = sliceActions;
     }
 
     return actions as Types.InferApi<TGlobalActions, TSlices, 'actions'>;
-  }
-
-  /**
-   * Builds reactive selectors with `this` bound to snapshot getter.
-   * Used by useSnapshot hook for reactive reads.
-   */
-  private buildReactiveSelectors(
-    stateGetter: () => Types.InferStateFromSlices<TRootState, TSlices>
-  ): Types.InferApi<TGlobalSelectors, TSlices, 'selectors'> {
-    const selectors: Record<string, Function | Record<string, Function>> = {};
-
-    // Global selectors - bind to snapshot getter (reactive)
-    for (const methodName of Object.keys(this.config.selectors ?? {})) {
-      selectors[methodName] = (...args: unknown[]) => {
-        return this.config.selectors[methodName].call(stateGetter(), ...args);
-      };
-    }
-
-    // Slice selectors - bind to snapshot getter (reactive)
-    for (const slice of this.config.slices) {
-      const sliceSelectors: Record<string, Function> = {};
-
-      for (const methodName of Object.keys(slice.selectors ?? {})) {
-        sliceSelectors[methodName] = (...args: unknown[]) => {
-          return slice.selectors[methodName].call((stateGetter() as any)[slice.key], ...args);
-        };
-      }
-
-      selectors[slice.key] = sliceSelectors;
-    }
-
-    return selectors as Types.InferApi<TGlobalSelectors, TSlices, 'selectors'>;
   }
 
   //

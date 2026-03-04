@@ -15,8 +15,6 @@ export interface Slice {
  * Counter slice - demonstration of basic state management and synchronization.
  */
 export default RVS.createSlice({
-  key: 'counter',
-  
   initial: (): Slice => ({
     count: 0,
     lastUpdated: Date.now(),

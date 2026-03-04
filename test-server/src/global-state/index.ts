@@ -11,7 +11,6 @@ import usersSlice from './slices/users';
 
 export interface State {
   id: string;
-  test: string;
 }
 
 //
@@ -23,11 +22,10 @@ export default RVS.createState({
   persistAndSync: true,
 
   name: 'global-state',
-  generation: 'generation-3',
+  generation: 'generation-1',
 
   initial: {
     id: RandomWordSlugs.generateSlug(),
-    test: 'test',
   } as State,
 
   selectors: {
@@ -45,5 +43,10 @@ export default RVS.createState({
     },
   },
 
-  slices: [counterSlice, todosSlice, messagesSlice, usersSlice],
+  slices: {
+    counter: counterSlice,
+    todos: todosSlice,
+    messages: messagesSlice,
+    users: usersSlice,
+  },
 });
