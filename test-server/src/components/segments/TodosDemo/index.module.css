@@ -1,0 +1,200 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 28px;
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.15) 0%, rgba(167, 139, 250, 0.05) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 20px;
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  animation: fadeIn 0.5s ease-out;
+  animation-delay: 0.2s;
+  animation-fill-mode: both;
+}
+
+.title {
+  flex-shrink: 0;
+  margin: 0 0 20px 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #c4b5fd;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title::before {
+  content: '✅';
+  font-size: 24px;
+}
+
+.inputGroup {
+  flex-shrink: 0;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.input {
+  flex: 1;
+  padding: 14px 18px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 12px;
+  color: #ffffff;
+}
+
+.input::placeholder {
+  color: #94a3b8;
+}
+
+.input:focus {
+  border-color: rgba(167, 139, 250, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.addButton {
+  padding: 14px 28px;
+  font-size: 14px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+}
+
+.addButton:hover {
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+}
+
+.filterButtons {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.filterButton {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 20px;
+  text-transform: capitalize;
+  transition: all 0.2s ease;
+}
+
+.filterButtonActive {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+}
+
+.filterButtonInactive {
+  background: rgba(167, 139, 250, 0.15);
+  color: #c4b5fd;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+}
+
+.filterButtonInactive:hover {
+  background: rgba(167, 139, 250, 0.25);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.todoList {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 16px;
+  overflow-y: auto;
+}
+
+.emptyMessage {
+  color: #a78bfa;
+  font-style: italic;
+  text-align: center;
+  padding: 32px 0;
+  opacity: 0.8;
+}
+
+.todoItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.todoItem:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(167, 139, 250, 0.3);
+  transform: translateX(4px);
+}
+
+.checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #8b5cf6;
+}
+
+.todoText {
+  flex: 1;
+  color: #f1f5f9;
+  font-size: 14px;
+}
+
+.todoTextCompleted {
+  text-decoration: line-through;
+  color: #64748b;
+  opacity: 0.7;
+}
+
+.deleteButton {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(239, 68, 68, 0.3);
+}
+
+.deleteButton:hover {
+  background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+}
+
+.clearCompletedButton {
+  flex-shrink: 0;
+  width: 100%;
+  padding: 12px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+}
+
+.clearCompletedButton:hover {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}

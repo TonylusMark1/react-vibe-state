@@ -1,0 +1,179 @@
+.cosmos {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Star layers with different sizes */
+.starsSmall,
+.starsMedium,
+.starsLarge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-repeat: repeat;
+}
+
+.starsSmall {
+  background-image: 
+    radial-gradient(1px 1px at 20px 30px, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(1px 1px at 40px 70px, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1px 1px at 50px 160px, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 90px 40px, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 130px 80px, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1px 1px at 160px 120px, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1px 1px at 200px 50px, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 220px 140px, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 260px 90px, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1px 1px at 300px 170px, rgba(255, 255, 255, 0.4), transparent);
+  background-size: 320px 200px;
+  animation: twinkle 4s ease-in-out infinite;
+}
+
+.starsMedium {
+  background-image: 
+    radial-gradient(1.5px 1.5px at 100px 50px, rgba(167, 139, 250, 0.9), transparent),
+    radial-gradient(1.5px 1.5px at 200px 150px, rgba(96, 165, 250, 0.8), transparent),
+    radial-gradient(1.5px 1.5px at 300px 100px, rgba(244, 114, 182, 0.7), transparent),
+    radial-gradient(1.5px 1.5px at 400px 200px, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(1.5px 1.5px at 150px 250px, rgba(52, 211, 153, 0.6), transparent),
+    radial-gradient(1.5px 1.5px at 350px 50px, rgba(251, 146, 60, 0.5), transparent);
+  background-size: 500px 300px;
+  animation: twinkle 6s ease-in-out infinite;
+  animation-delay: -2s;
+}
+
+.starsLarge {
+  background-image: 
+    radial-gradient(2px 2px at 150px 100px, rgba(167, 139, 250, 1), transparent),
+    radial-gradient(2.5px 2.5px at 400px 300px, rgba(96, 165, 250, 0.9), transparent),
+    radial-gradient(2px 2px at 600px 150px, rgba(244, 114, 182, 0.8), transparent),
+    radial-gradient(3px 3px at 250px 400px, rgba(255, 255, 255, 1), transparent);
+  background-size: 800px 500px;
+  animation: twinkleSlow 8s ease-in-out infinite;
+}
+
+/* Floating particles rising up */
+.particles {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+.particle {
+  position: absolute;
+  bottom: -20px;
+  width: 4px;
+  height: 4px;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.8) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: rise linear infinite;
+  opacity: 0;
+}
+
+.particle:nth-child(odd) {
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.7) 0%, transparent 70%);
+  width: 3px;
+  height: 3px;
+}
+
+.particle:nth-child(3n) {
+  background: radial-gradient(circle, rgba(244, 114, 182, 0.6) 0%, transparent 70%);
+  width: 5px;
+  height: 5px;
+}
+
+.particle:nth-child(5n) {
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.5) 0%, transparent 70%);
+}
+
+/* Nebula glows - soft colored clouds */
+.nebula1,
+.nebula2,
+.nebula3 {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.15;
+  animation: nebulaDrift 30s ease-in-out infinite;
+}
+
+.nebula1 {
+  top: 10%;
+  left: 10%;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.6) 0%, transparent 70%);
+  animation-delay: 0s;
+}
+
+.nebula2 {
+  top: 50%;
+  right: 10%;
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.5) 0%, transparent 70%);
+  animation-delay: -10s;
+  animation-duration: 35s;
+}
+
+.nebula3 {
+  bottom: 10%;
+  left: 30%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(244, 114, 182, 0.4) 0%, transparent 70%);
+  animation-delay: -20s;
+  animation-duration: 40s;
+}
+
+/* Animations */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes twinkleSlow {
+  0%, 100% { opacity: 0.5; }
+  25% { opacity: 0.9; }
+  75% { opacity: 0.7; }
+}
+
+@keyframes rise {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(-100vh) translateX(20px);
+    opacity: 0;
+  }
+}
+
+@keyframes nebulaDrift {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(30px, -20px) scale(1.05);
+  }
+  50% {
+    transform: translate(-20px, 30px) scale(0.95);
+  }
+  75% {
+    transform: translate(20px, 20px) scale(1.02);
+  }
+}

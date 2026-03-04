@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "declarationMap": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}
