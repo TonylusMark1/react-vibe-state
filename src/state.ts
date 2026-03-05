@@ -194,7 +194,7 @@ export class State<
 
   private ydoc?: Y.Doc;
   private ymap?: Y.Map<unknown>;
-  private providers?: Array<{ destroy: () => void }>;
+  private providers?: any[];
 
   /**
    * The reactive state proxy. Mutations to this object trigger re-renders
@@ -283,28 +283,28 @@ export class State<
     //
 
     if (Utils.isBrowser && this.config.persistAndSync) {
-      // Yjs document for persistence and cross-tab sync
-      this.ydoc = new Y.Doc();
+      this.ydoc = new Y.Doc(); // Yjs document for persistence & cross-tab sync
       this.ymap = this.ydoc.getMap('state');
       this.providers = [];
 
-      // Async initialization 
-      this.ready = this.initialize().catch((error: unknown) => {
-        this.config.onError?.(error);
-        throw error;
-      });
+      // Async initialization
+      this.ready = this.initialize();
     }
     else {
       // Server-side or disabled persistAndSync - instant ready
-      this.isReadyFlag = true;
-      this.ready = Promise.resolve();
+      this.ready = this.initializeLocal();
     }
 
     //
 
-    this.ready.then(() => {
-      this.config.onReady?.();
-    });
+    this.ready
+      .then(() => {
+        this.config.onReady?.();
+      })
+      .catch((error: unknown) => {
+        this.config.onError?.(error);
+        throw error;
+      });
   }
 
   private async initialize() { // (order is crucial!)
@@ -317,7 +317,7 @@ export class State<
     // 2. If we have data from Storage, validate and apply to state BEFORE binding
     //    This prevents overwriting Storage data with initial state
     if (hadStoredData)
-      this.validateAndApplyFromStorage(this.ymap!.toJSON());
+      this.validateAndApplyFromStorage();
 
     // 3. NOW bind Valtio with Yjs
     //    - If Y.Map was empty → initial state will be copied to Y.Map
@@ -328,6 +328,10 @@ export class State<
     this.initSync();
 
     // 5. Set ready flag
+    this.isReadyFlag = true;
+  }
+
+  private async initializeLocal() {
     this.isReadyFlag = true;
   }
 
@@ -492,7 +496,11 @@ export class State<
     }
   }
 
-  private validateAndApplyFromStorage(fromStorage: Record<string, unknown>): void {
+  private validateAndApplyFromStorage(): void {
+    const fromStorage = this.ymap!.toJSON();
+
+    //
+
     const sliceKeys = new Set(Object.keys(this.config.slices));
 
     // Extract and validate root state (keys that are not slice keys)
@@ -508,8 +516,9 @@ export class State<
       
       this.config.onStorageValidationFail?.(rootFromStorage);
     }
-    else
+    else {
       Object.assign(this.state, rootFromStorage);
+    }
 
     // Validate and apply each slice separately
     for (const [sliceKey, slice] of Object.entries(this.config.slices)) {
@@ -524,8 +533,9 @@ export class State<
         slice.onStorageValidationFail?.(sliceData);
         this.config.onStorageValidationFail?.(sliceData, sliceKey);
       }
-      else
+      else {
         (this.state as any)[sliceKey] = sliceData;
+      }
     }
   }
 
@@ -727,7 +737,7 @@ export class State<
             hadStoredData = true;
         };
 
-        this.ydoc!.on('update', trackOrigin);
+        this.ydoc!.once('update', trackOrigin);
         const untrackOrigin = () => this.ydoc!.off('update', trackOrigin);
 
         //
@@ -736,7 +746,7 @@ export class State<
 
         this.providers!.push(indexeddbProvider);
 
-        indexeddbProvider.on('synced', () => {
+        indexeddbProvider.once('synced', () => {
           untrackOrigin();
 
           try {
