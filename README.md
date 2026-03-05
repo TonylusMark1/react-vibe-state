@@ -1,6 +1,6 @@
 # 🌊 react-vibe-state
 
-Reactive state management with **automatic persistence** and **cross-tab synchronization**. Use state like a plain JavaScript object - persistence and sync happen transparently in the background.
+Reactive state management with **automatic persistence** and **cross-tab synchronization**. Use state almost like a plain JavaScript object - persistence and sync happen transparently in the background.
 
 ## Features
 
@@ -15,6 +15,7 @@ Reactive state management with **automatic persistence** and **cross-tab synchro
 
 - [Valtio](https://github.com/pmndrs/valtio) - reactive proxy-based state
 - [Yjs](https://github.com/yjs/yjs) - CRDT for conflict-free merging
+- [valtio-yjs](https://github.com/dai-shi/valtio-yjs) - two-way binding between Valtio proxy and Yjs doc
 - [y-indexeddb](https://github.com/yjs/y-indexeddb) - IndexedDB persistence provider
 - [y-webrtc](https://github.com/yjs/y-webrtc) - BroadcastChannel sync (WebRTC disabled)
 
@@ -83,15 +84,15 @@ const state = createState({
 
 | Option                         | Type                         | Default        | Description                                              |
 | ------------------------------ | ---------------------------- | -------------- | -------------------------------------------------------- |
+| `persistAndSync`               | `boolean`                    | `true`         | Enable browser storage persistence and cross-tab sync |
+| `storage`                      | `"indexed-db"`               | `"indexed-db"` | Storage backend                                          |
 | `name`                         | `string`                     | *required*     | Unique identifier (letters, numbers, `_`, `-`)           |
+| `generation`                   | `string | null`              | `null`         | Version identifier; changing it purges old data          |
 | `initial`                      | `T | () => T`                | *required*     | Initial state object or factory function                 |
 | `selectors`                    | `object`                     | `{}`           | Methods for derived values (`this` = readonly state)     |
 | `actions`                      | `object`                     | `{}`           | Methods for mutations (`this` = mutable state)           |
 | `slices`                       | `{ [key]: Slice }`           | `{}`           | Object of slices created with `createSlice()`            |
-| `persistAndSync`               | `boolean`                    | `true`         | Enable in browser storage persistence and cross-tab sync |
-| `storage`                      | `"indexed-db"`               | `"indexed-db"` | Storage backend                                          |
 | `readyTimeout`                 | `number`                     | `5000`         | Max ms to wait for storage initialization                |
-| `generation`                   | `string | null`              | `null`         | Version identifier; changing it purges old data          |
 | `validate`                     | `(state) => boolean`         | `null`         | Validation function for state structure                  |
 | `validateOnRemoteUpdate`       | `boolean`                    | `false`        | Validate state after cross-tab updates                   |
 | `onReady`                      | `() => void`                 | `null`         | Called when initialization completes                     |
@@ -201,27 +202,27 @@ const appState = createState({
   },
   
   validateOnRemoteUpdate: true,
-  
-  onRemoteUpdateValidationFail: () => {
-    // Remote tab sent invalid data - reload to recover
-    location.reload();
-  },
-  
+    
   onStorageValidationFail: (invalidData) => {
     console.warn('Stored data invalid, using initial state', JSON.stringify(invalidData));
+  },
+  
+  onRemoteUpdateValidationFail: () => {
+    // Remote tab sent incompatible data - probably has newer schema, try to reload the page to align
+    location.reload();
   },
 });
 ```
 
 **Validation behavior:**
 
-- **Initial state** - throws if invalid (fix your code)
-- **Stored data** - falls back to initial if invalid
-- **Remote updates** (`validateOnRemoteUpdate` is `true`) - throws if invalid
+- **Initial state** - if invalid then throws error (fix your code)
+- **Stored data** - if invalid then calls `onStorageValidationFail` & falls back to initial
+- **Remote updates** (`validateOnRemoteUpdate` must be `true`) - if invalid then calls `onRemoteUpdateValidationFail` & throws error
 
 ## Generation (Schema Versioning)
 
-When your state schema changes incompatibly, change the `generation` to purge old data:
+Useful for session-scoped page state. When your state schema changes incompatibly, change the `generation` to purge old data:
 
 ```ts
 const appState = createState({

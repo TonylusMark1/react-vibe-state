@@ -22,11 +22,32 @@ export interface Config<
   TSlices extends Types.SlicesRecord = {}
 > {
   /**
+   * Enable persistence to IndexedDB and cross-tab synchronization via BroadcastChannel.
+   * When enabled, state is automatically saved and synced between browser tabs.
+   * @default true
+   */
+  persistAndSync?: boolean;
+  /**
+   * Storage type(s) to use for persistence.
+   * - "indexed-db": use IndexedDB (default)
+   * - ["indexed-db"]: array with potential fallbacks (future-proof)
+   * Only used when `persistAndSync` is true.
+   * @default "indexed-db"
+   */
+  storage?: Types.Storage | Types.Storage[];
+  /**
    * Unique name identifying this state.
    * Must contain only letters, numbers, underscores, and hyphens.
    * Cannot contain key separator character. @see keySeparator
    */
   name: string;
+  /**
+   * Generation identifier for state isolation.
+   * When set, all previous generations (states with same name but different generation)
+   * will be automatically purged from storage before initialization.
+   * Useful for session-based state where old sessions should be invalidated or for versioning.
+   */
+  generation?: string | null;
   /**
    * Initial root state object, or a factory function that returns the initial state.
    * Factory functions are useful for dynamic values (e.g., reading from cookies, assinging current timestamp).
@@ -48,32 +69,11 @@ export interface Config<
    */
   slices?: TSlices;
   /**
-   * Enable persistence to IndexedDB and cross-tab synchronization via BroadcastChannel.
-   * When enabled, state is automatically saved and synced between browser tabs.
-   * @default true
-   */
-  persistAndSync?: boolean;
-  /**
-   * Storage type(s) to use for persistence.
-   * - "indexed-db": use IndexedDB (default)
-   * - ["indexed-db"]: array with potential fallbacks (future-proof)
-   * Only used when `persistAndSync` is true.
-   * @default "indexed-db"
-   */
-  storage?: Types.Storage | Types.Storage[];
-  /**
    * Maximum time in milliseconds to wait for storage to load before timing out.
    * If storage takes longer, initialization will fail with an error.
    * @default 5000
    */
   readyTimeout?: number;
-  /**
-   * Generation identifier for state isolation.
-   * When set, all previous generations (states with same name but different generation)
-   * will be automatically purged from storage before initialization.
-   * Useful for session-based state where old sessions should be invalidated or for versioning.
-   */
-  generation?: string | null;
   /**
    * Character used to separate parts of the storage key (prefix, name, generation).
    * The state name cannot contain this character.
@@ -227,15 +227,17 @@ export class State<
     this.config = {
       persistAndSync: true,
       storage: "indexed-db",
+      
+      generation: null,
 
-      keySeparator: Consts.DEFAULT_KEY_SEPARATOR,
       readyTimeout: 5000,
-
+      
       selectors: {} as TGlobalSelectors,
       actions: {} as TGlobalActions,
       slices: {} as TSlices,
-      generation: null,
 
+      keySeparator: Consts.DEFAULT_KEY_SEPARATOR,
+      
       validate: null,
       validateOnRemoteUpdate: false,
       
