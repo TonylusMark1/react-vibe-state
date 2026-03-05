@@ -87,8 +87,8 @@ const state = createState({
 | `persistAndSync`               | `boolean`                    | `true`         | Enable browser storage persistence and cross-tab sync |
 | `storage`                      | `"indexed-db"`               | `"indexed-db"` | Storage backend                                          |
 | `name`                         | `string`                     | *required*     | Unique identifier (letters, numbers, `_`, `-`)           |
-| `generation`                   | `string | null`              | `null`         | Version identifier; changing it purges old data          |
-| `initial`                      | `T | () => T`                | *required*     | Initial state object or factory function                 |
+| `generation`                   | `string \| null`             | `null`         | Version identifier; changing it purges old data          |
+| `initial`                      | `T \| () => T`               | *required*     | Initial state object or factory function                 |
 | `selectors`                    | `object`                     | `{}`           | Methods for derived values (`this` = readonly state)     |
 | `actions`                      | `object`                     | `{}`           | Methods for mutations (`this` = mutable state)           |
 | `slices`                       | `{ [key]: Slice }`           | `{}`           | Object of slices created with `createSlice()`            |
@@ -106,14 +106,14 @@ const state = createState({
 **Properties:**
 
 
-| Property    | Type                       | Description                                                  |
-| ----------- | -------------------------- | ------------------------------------------------------------ |
-| `state`     | `TRootState & TSlices`     | Mutable proxy - read/write directly or via selectors/actions |
-| `selectors` | `object`                   | Bound selector methods (`this` = readonly state)             |
-| `actions`   | `object`                   | Bound action methods (`this` = mutable state)                |
-| `ready`     | `Promise<void>`            | Resolves when persistence is loaded                          |
-| `isReady`   | `boolean`                  | Whether initialization completed                             |
-| `storage`   | `"indexed-db" | undefined` | Used storage type or `undefined` if disabled                 |
+| Property    | Type                        | Description                                                  |
+| ----------- | --------------------------- | ------------------------------------------------------------ |
+| `state`     | `TRootState & TSlices`      | Mutable proxy - read/write directly or via selectors/actions |
+| `selectors` | `object`                    | Bound selector methods (`this` = readonly state)             |
+| `actions`   | `object`                    | Bound action methods (`this` = mutable state)                |
+| `ready`     | `Promise<void>`             | Resolves when persistence is loaded                          |
+| `isReady`   | `boolean`                   | Whether initialization completed                             |
+| `storage`   | `"indexed-db" \| undefined` | Used storage type or `undefined` if disabled                 |
 
 
 **Methods:**
@@ -166,7 +166,7 @@ appState.selectors.todos.filtered();
 
 | Option                         | Type                 | Default     | Description                                      |
 | ------------------------------ | -------------------- | ----------- | ------------------------------------------------ |
-| `initial`                      | `T | () => T`        | *required*  | Initial slice state object or factory function   |
+| `initial`                      | `T \| () => T`       | *required*  | Initial slice state object or factory function   |
 | `selectors`                    | `object`             | `{}`        | Slice-scoped selectors (`this` = slice state)    |
 | `actions`                      | `object`             | `{}`        | Slice-scoped actions (`this` = slice state)      |
 | `validate`                     | `(state) => boolean` | `undefined` | Slice-specific validation                        |
