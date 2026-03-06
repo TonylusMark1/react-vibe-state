@@ -3,12 +3,13 @@ import * as Valtio from 'valtio';
 import * as ValtioYjs from 'valtio-yjs';
 import * as Y from 'yjs';
 import * as YWebrtc from 'y-webrtc';
-import * as YIndexeddb from 'y-indexeddb';
 
 import type * as Types from './types';
-
 import * as Consts from './consts';
 import * as Utils from './utils';
+
+import { StorageGeneric } from './storages/generic';
+import { StorageIndexedDB } from './storages/indexed-db';
 
 //
 
@@ -85,22 +86,12 @@ export interface Config<
    * 
    * Behavior:
    * - Initial state: throws if invalid (developer error - fix your code)
-   * - Storage data: falls back to initial if invalid (stale/corrupted data)
-   * - Remote updates: throws if invalid and `validateOnRemoteUpdate` is true
+   * - Storage/remote updates: throws if invalid (always, when validate is set)
    * 
    * @param state - The state data to validate (type is unknown for safety)
    */
   validate?: null | ((state: unknown) => boolean);
-  /**
-   * When true, validates state after receiving updates from other browser tabs.
-   * If validation fails, an error is thrown. Use `onRemoteUpdateValidationFail`
-   * to handle this (e.g., trigger page refresh).
-   * 
-   * Requires `validate` to be set.
-   * @default false
-   */
-  validateOnRemoteUpdate?: boolean;
-  
+
   /**
    * Callback invoked when state initialization completes successfully.
    */
@@ -119,21 +110,14 @@ export interface Config<
   onError?: null | ((error: unknown) => void);
 
   /**
-   * Called when stored data fails validation during initialization.
-   * Invoked before falling back to initial state. The invalid data will be
-   * discarded and replaced with initial values.
-   * @param state - The invalid state data from storage
-   * @param sliceKey - The slice key if a specific slice failed, undefined for root state
-   */
-  onStorageValidationFail?: null | ((state: unknown, sliceKey?: keyof TSlices) => void);
-  /**
-   * Called when a remote update (from another tab) fails validation.
+   * Called when an external update (from storage or another tab) fails validation.
    * Invoked before the error is thrown. Use this to trigger a page refresh
-   * or other recovery action. Note: state may briefly contain invalid data.
+   * or other recovery action.
    * @param state - The invalid state data received
+   * @param origin - Whether the update came from storage or a remote tab
    * @param sliceKey - The slice key if a specific slice failed, undefined for root state
    */
-  onRemoteUpdateValidationFail?: null | ((state: unknown, sliceKey?: keyof TSlices) => void);
+  onUpdateValidationFail?: null | ((state: unknown, origin: Types.UpdateOrigin, sliceKey?: keyof TSlices) => void);
 }
 
 //
@@ -175,10 +159,14 @@ export class State<
   TSlices extends Types.SlicesRecord = {}
 > {
   private readonly config: Required<Config<TRootState, TGlobalSelectors, TGlobalActions, TSlices>>;
+
+  private readonly baseKey: string;
+  private readonly baseKeyPrefix: string;
   private readonly key: string;
 
+  private resolvedStorage: Types.Storage | undefined = undefined;
   private isReadyFlag: boolean = false;
-  
+
   /**
    * Promise that resolves when state initialization completes.
    * When `persistAndSync` is enabled, resolves after storage is loaded and sync is established.
@@ -194,7 +182,9 @@ export class State<
 
   private ydoc?: Y.Doc;
   private ymap?: Y.Map<unknown>;
-  private providers?: any[];
+
+  private storageAdapter?: StorageGeneric;
+  private syncProvider?: YWebrtc.WebrtcProvider;
 
   /**
    * The reactive state proxy. Mutations to this object trigger re-renders
@@ -204,22 +194,20 @@ export class State<
    * a reactive snapshot that triggers re-renders on changes.
    */
   readonly state: Types.InferStateFromSlices<TRootState, TSlices>;
-  
+
   /**
    * Bound selector methods for reading derived state.
    * In selectors, `this` referes to current state typed as read-only.
    * For reactive reads in React, use selectors from `useSnapshot()` instead.
    */
-  readonly selectors: Types.InferApi<TGlobalSelectors, TSlices, 'selectors'>;
-  
+  readonly selectors!: Types.InferApi<TGlobalSelectors, TSlices, 'selectors'>;
+
   /**
    * Bound action methods for mutating state.
    * In actions, `this` refers to the mutable state proxy.
    * Can be called from anywhere (React components, event handlers, etc.).
    */
-  readonly actions: Types.InferApi<TGlobalActions, TSlices, 'actions'>;
-
-  private activeStorage: Types.Storage | undefined;
+  readonly actions!: Types.InferApi<TGlobalActions, TSlices, 'actions'>;
 
   //
 
@@ -227,73 +215,64 @@ export class State<
     this.config = {
       persistAndSync: true,
       storage: "indexed-db",
-      
+
       generation: null,
 
       readyTimeout: 5000,
-      
+
       selectors: {} as TGlobalSelectors,
       actions: {} as TGlobalActions,
       slices: {} as TSlices,
 
       keySeparator: Consts.DEFAULT_KEY_SEPARATOR,
-      
+
       validate: null,
-      validateOnRemoteUpdate: false,
-      
+
       onReady: null,
       onWarn: null,
       onError: null,
 
-      onStorageValidationFail: null,
-      onRemoteUpdateValidationFail: null,
+      onUpdateValidationFail: null,
 
       ...config
     };
 
     //
 
-    Utils.validateName(this.config.name, this.config.keySeparator);
-
-    //
-
-    // Build key: prefix:name or prefix:name:generation
-    this.key = Utils.buildKey(
-      Consts.STORAGE_PREFIX,
-      this.config.keySeparator,
-      this.config.name,
-      this.config.generation
-    );
-
-    //
-
-    // Validate initial state before creating proxy
-    this.validateInitialState();
+    this.validateName();
+    this.validateInitial();
     this.validateSliceKeys();
 
-    // Create Valtio proxy with initial state (so UI works immediately)
-    this.state = Valtio.proxy(this.buildEntireInitialState());
+    //
+
+    this.baseKey = `${Consts.STORAGE_PREFIX}${this.config.keySeparator}${this.config.name}`;
+    this.baseKeyPrefix = `${this.baseKey}${this.config.keySeparator}`;
+
+    this.key = this.config.generation ? `${this.baseKeyPrefix}${this.config.generation}` : this.baseKey;
 
     //
 
-    // Build selectors and actions
+    this.state = (() => {
+      if (this.persistAndSync) {
+        this.ydoc = new Y.Doc();
+        this.ymap = this.ydoc.getMap('state');
+  
+        // In the future: createYjsProxy here instead of Valtio.proxy (valtio-yjs -> valtio-y)
+        return Valtio.proxy(this.buildEntireInitial());
+      }
+      else {
+        return Valtio.proxy(this.buildEntireInitial());
+      }
+    })();
+
+    //
+
     this.selectors = this.buildSelectors();
     this.actions = this.buildActions();
 
     //
 
-    if (Utils.isBrowser && this.config.persistAndSync) {
-      this.ydoc = new Y.Doc(); // Yjs document for persistence & cross-tab sync
-      this.ymap = this.ydoc.getMap('state');
-      this.providers = [];
-
-      // Async initialization
-      this.ready = this.initialize();
-    }
-    else {
-      // Server-side or disabled persistAndSync - instant ready
-      this.ready = this.initializeLocal();
-    }
+    this.ready = this.initialize();
 
     //
 
@@ -307,32 +286,31 @@ export class State<
       });
   }
 
-  private async initialize() { // (order is crucial!)
-    // 0. FIRST detect and initialize storage
-    await this.initStorage();
+  private async initialize() {
+    if (this.persistAndSync) {
+      // Register validation listener BEFORE loading from storage
+      this.initUpdateValidation();
 
-    // 1. Load from storage to Y.Doc (without binding!)
-    const hadStoredData = await this.initPersistence();
+      // Initialize storage.
+      // Load from storage - data flows into Y.Doc,
+      await this.initStorage();
 
-    // 2. If we have data from Storage, validate and apply to state BEFORE binding
-    //    This prevents overwriting Storage data with initial state
-    if (hadStoredData)
-      this.validateAndApplyFromStorage();
+      // Bind Valtio with Yjs - storage data syncs to proxy via initializeFromY
+      ValtioYjs.bind(this.state, this.ymap!);
 
-    // 3. NOW bind Valtio with Yjs
-    //    - If Y.Map was empty → initial state will be copied to Y.Map
-    //    - If Y.Map had data → state already has this data, deepEqual will prevent duplication
-    ValtioYjs.bind(this.state, this.ymap!);
+      // Enable cross-tab sync - future updates validated with origin='remote'
+      this.initSync();
+    }
 
-    // 4. Now we can enable cross-tab sync
-    this.initSync();
+    //
 
-    // 5. Set ready flag
     this.isReadyFlag = true;
   }
 
-  private async initializeLocal() {
-    this.isReadyFlag = true;
+  //
+
+  private get persistAndSync(): boolean {
+    return Utils.isBrowser && this.config.persistAndSync;
   }
 
   //
@@ -350,7 +328,7 @@ export class State<
    * Returns `undefined` if persistence is disabled or initialization hasn't completed yet.
    */
   get storage(): Types.Storage | undefined {
-    return this.activeStorage;
+    return this.resolvedStorage;
   }
 
   /**
@@ -447,7 +425,7 @@ export class State<
    * ```
    */
   reset(sliceKey?: keyof TSlices & string): void {
-    if ( !this.isReadyFlag )
+    if (!this.isReadyFlag)
       throw new Error(`[${this.config.name}] Cannot reset State while it is not ready`);
 
     //
@@ -462,13 +440,40 @@ export class State<
       return;
     }
 
-    Object.assign(this.state, this.buildEntireInitialState());
+    Object.assign(this.state, this.buildEntireInitial());
   }
 
   //
 
+  private initUpdateValidation(): void {
+    const hasSliceValidators = Object.values(this.config.slices).some(s => s.validate);
+
+    if (!this.config.validate && !hasSliceValidators)
+      return;
+
+    this.ydoc!.on('update', (_: unknown, origin: unknown) => {
+      if (origin === this.storageAdapter?.provider)
+        this.validateUpdate('storage');
+      else if (origin === this.syncProvider)
+        this.validateUpdate('remote');
+    });
+  }
+
+  //
+
+  private validateName(): void {
+    if (!this.config.name || !this.config.name.trim())
+      throw new Error('State name cannot be empty');
+    
+    if (this.config.name.includes(this.config.keySeparator))
+      throw new Error(`State name cannot contain separator "${this.config.keySeparator}"`);
+    
+    if (!/^[a-zA-Z0-9_-]+$/.test(this.config.name))
+      throw new Error('State name can only contain letters, numbers, underscores and hyphens');
+  }
+
   private validateSliceKeys(): void {
-    const rootKeys = new Set(Object.keys(Utils.resolveInitial(this.config.initial)));
+    const rootKeys = new Set(Object.keys(Utils.resolveValue(this.config.initial)));
 
     for (const sliceKey of Object.keys(this.config.slices)) {
       if (rootKeys.has(sliceKey))
@@ -476,11 +481,9 @@ export class State<
     }
   }
 
-  //
-
-  private validateInitialState(): void {
+  private validateInitial(): void {
     if (this.config.validate) {
-      const rootInitial = Utils.resolveInitial(this.config.initial);
+      const rootInitial = Utils.resolveValue(this.config.initial);
 
       if (!this.config.validate(rootInitial))
         throw new Error(`[${this.config.name}] Root initial state failed validation`);
@@ -488,7 +491,7 @@ export class State<
 
     for (const [sliceKey, slice] of Object.entries(this.config.slices)) {
       if (slice.validate) {
-        const sliceInitial = Utils.resolveInitial(slice.initial);
+        const sliceInitial = Utils.resolveValue(slice.initial);
 
         if (!slice.validate(sliceInitial))
           throw new Error(`[${this.config.name}] Slice "${sliceKey}" initial state failed validation`);
@@ -496,54 +499,11 @@ export class State<
     }
   }
 
-  private validateAndApplyFromStorage(): void {
-    const fromStorage = this.ymap!.toJSON();
-
-    //
-
-    const sliceKeys = new Set(Object.keys(this.config.slices));
-
-    // Extract and validate root state (keys that are not slice keys)
-    const rootFromStorage: Record<string, unknown> = {};
-    for (const key of Object.keys(fromStorage)) {
-      if (!sliceKeys.has(key))
-        rootFromStorage[key] = fromStorage[key];
-    }
-
-    if (this.config.validate && !this.config.validate(rootFromStorage)) {
-      for (const key of Object.keys(rootFromStorage))
-        this.ymap!.delete(key);
-      
-      this.config.onStorageValidationFail?.(rootFromStorage);
-    }
-    else {
-      Object.assign(this.state, rootFromStorage);
-    }
-
-    // Validate and apply each slice separately
-    for (const [sliceKey, slice] of Object.entries(this.config.slices)) {
-      const sliceData = <Record<string, unknown>> fromStorage[sliceKey];
-
-      if (sliceData === undefined)
-        continue;
-
-      if (slice.validate && !slice.validate(sliceData)) {
-        this.ymap!.delete(sliceKey);
-
-        slice.onStorageValidationFail?.(sliceData);
-        this.config.onStorageValidationFail?.(sliceData, sliceKey);
-      }
-      else {
-        (this.state as any)[sliceKey] = sliceData;
-      }
-    }
-  }
-
-  private validateRemoteUpdate(): void {
+  private validateUpdate(origin: Types.UpdateOrigin): void {
     const current = this.ymap!.toJSON();
     const sliceKeys = new Set(Object.keys(this.config.slices));
+    const label = origin === 'storage' ? 'Storage' : 'Remote';
 
-    // Validate root state
     if (this.config.validate) {
       const rootState: Record<string, unknown> = {};
       for (const key of Object.keys(current)) {
@@ -552,30 +512,28 @@ export class State<
       }
 
       if (!this.config.validate(rootState)) {
-        this.config.onRemoteUpdateValidationFail?.(rootState);
-        throw new Error(`[${this.config.name}] Remote update failed root state validation`);
+        this.config.onUpdateValidationFail?.(rootState, origin);
+        throw new Error(`[${this.config.name}] ${label} update failed root state validation`);
       }
     }
 
-    // Validate each slice
     for (const [sliceKey, slice] of Object.entries(this.config.slices)) {
       if (!slice.validate)
         continue;
 
       const sliceData = current[sliceKey];
       if (sliceData !== undefined && !slice.validate(sliceData)) {
-        slice.onRemoteUpdateValidationFail?.(sliceData);
-        this.config.onRemoteUpdateValidationFail?.(sliceData, sliceKey);
-        throw new Error(`[${this.config.name}] Remote update failed validation for slice "${sliceKey}"`);
+        slice.onUpdateValidationFail?.(sliceData, origin);
+        this.config.onUpdateValidationFail?.(sliceData, origin, sliceKey);
+        throw new Error(`[${this.config.name}] ${label} update failed validation for slice "${sliceKey}"`);
       }
     }
   }
 
   //
 
-  private buildEntireInitialState(): Types.InferStateFromSlices<TRootState, TSlices> {
-    const resolvedInitial = <any>Utils.resolveInitial(this.config.initial);
-
+  private buildEntireInitial(): Types.InferStateFromSlices<TRootState, TSlices> {
+    const resolvedInitial = <any>Utils.resolveValue(this.config.initial);
     const initial = structuredClone(resolvedInitial);
 
     for (const [sliceKey, slice] of Object.entries(this.config.slices))
@@ -585,7 +543,7 @@ export class State<
   }
 
   private buildSliceInitialState(slice: Types.AnySlice): Types.InferStateFromSlices<TRootState, TSlices> {
-    const resolvedSliceInitial = Utils.resolveInitial(slice.initial);
+    const resolvedSliceInitial = Utils.resolveValue(slice.initial);
     return structuredClone(resolvedSliceInitial);
   }
 
@@ -669,34 +627,10 @@ export class State<
   //
 
   private async initStorage(): Promise<void> {
-    // Normalize storage to array
-    const storages: Types.Storage[] = typeof this.config.storage === 'string'
-      ? [this.config.storage]
-      : this.config.storage;
+    this.storageAdapter = await this.createStorageAdapter();
 
-    //
-
-    // Find first available storage
-    this.activeStorage = await (async () => {
-      for (const storage of storages) {
-        if (await Utils.isStorageAvailable(storage))
-          return storage;
-      }
-
-      throw new Error(`[${this.config.name}] No available storage found. Tried: ${storages.join(', ')}`);
-    })();
-
-    //
-
-    if (this.config.generation) // Purge old generations before using storage
-      await this.purgeOldGenerations(this.activeStorage);
-  }
-
-  //
-
-  private async initPersistence() {
-    if (this.activeStorage === undefined)
-      return false;
+    if (this.config.generation)
+      await this.storageAdapter.purgeByPrefix(this.baseKeyPrefix, [this.key]);
 
     //
 
@@ -708,137 +642,57 @@ export class State<
       ), this.config.readyTimeout);
     });
 
-    //
-
-    const initPromise = (() => {
-      if (this.activeStorage === "indexed-db")
-        return this.initPersistenceIndexeddb();
-
-      return Promise.resolve(false);
-    })();
-
-    //
-
     try {
-      return await Promise.race([initPromise, timeoutPromise]);
+      await Promise.race([this.storageAdapter!.initPersistence(), timeoutPromise]);
     }
     finally {
       clearTimeout(timeoutId!);
     }
   }
 
-  private initPersistenceIndexeddb() {
-    return new Promise<boolean>((resolve, reject) => {
-      try {
-        let hadStoredData: boolean = false;
-
-        const trackOrigin = (_: unknown, origin: any) => {
-          if (origin === indexeddbProvider)
-            hadStoredData = true;
-        };
-
-        this.ydoc!.once('update', trackOrigin);
-        const untrackOrigin = () => this.ydoc!.off('update', trackOrigin);
-
-        //
-
-        const indexeddbProvider = new YIndexeddb.IndexeddbPersistence(this.key, this.ydoc!);
-
-        this.providers!.push(indexeddbProvider);
-
-        indexeddbProvider.once('synced', () => {
-          untrackOrigin();
-
-          try {
-            if (hadStoredData) { // Compact state (reduce storage usage)
-              // It is undocumented method and is used internally by y-indexeddb to reduce storage usage every PREFERRED_TRIM_SIZE (500) updates.
-              // Here we call it manually to reduce storage usage after first sync.
-              YIndexeddb.storeState?.(indexeddbProvider, true);
-            }
-
-            resolve(hadStoredData);
-          }
-          catch (error) {
-            reject(error);
-          }
-        });
-
-        indexeddbProvider.on('error', (error: Error) => {
-          untrackOrigin();
-          reject(error);
-        });
-
-      }
-      catch (error) {
-        reject(error);
-      }
-    });
-  }
-
-  //
-
-  private async purgeOldGenerations(storage: Types.Storage): Promise<void> {
-    const sep = this.config.keySeparator;
-    const prefix = Utils.buildKey(Consts.STORAGE_PREFIX, sep, this.config.name) + sep;
+  private async createStorageAdapter(): Promise<StorageGeneric> {
+    const storages: Types.Storage[] = (
+      typeof this.config.storage === 'string'
+        ? [this.config.storage]
+        : this.config.storage
+    );
 
     //
-    
-    switch (storage) {
-      case "indexed-db": {
-        if (typeof globalThis.indexedDB === 'undefined' || globalThis.indexedDB === null)
-          throw new Error(`[${this.config.name}] IndexedDB is not supported in this browser`);
 
-        if (typeof globalThis.indexedDB.databases !== 'function')
-          throw new Error(`[${this.config.name}] IndexedDB.databases is not supported in this browser`);
+    for (const storage of storages) {
+      let adapter: StorageGeneric | undefined = undefined;
 
-        //
+      switch (storage) {
+        case "indexed-db":
+          if (await StorageIndexedDB.isAvailable())
+            adapter = await this.createStorageAdapterForIndexedDB();
+          break;
+      }
 
-        const databases = await globalThis.indexedDB.databases();
-
-        const deletePromises = databases
-          .map(db => db.name)
-          .filter((name): name is string =>
-            name !== undefined &&
-            name.startsWith(prefix) &&
-            name !== this.key
-          )
-          .map(name => new Promise<void>((resolve) => {
-            const request = globalThis.indexedDB.deleteDatabase(name);
-            request.onsuccess = () => resolve();
-            request.onerror = () => {
-              this.config.onWarn?.(`Failed to purge old generation database: ${name}`);
-              resolve();
-            };
-            request.onblocked = () => {
-              this.config.onWarn?.(`Purge blocked for database: ${name} (in use by another tab)`);
-              resolve();
-            };
-          }));
-
-        await Promise.all(deletePromises);
-        break;
+      if (adapter) {
+        this.resolvedStorage = storage;
+        return adapter;
       }
     }
+
+    //
+
+    throw new Error(`[${this.config.name}] No available storage found. Tried: ${storages.join(', ')}`);
+  }
+
+  private async createStorageAdapterForIndexedDB(): Promise<StorageIndexedDB> {
+    return new StorageIndexedDB({
+      key: this.key,
+      ydoc: this.ydoc!,
+      onWarn: this.config.onWarn ?? undefined,
+    });
   }
 
   //
 
   private initSync(): void {
-    const provider = new YWebrtc.WebrtcProvider(this.key, this.ydoc!, {
-      signaling: [], // signaling is disabled, BroadcastChannel is all we need
+    this.syncProvider = new YWebrtc.WebrtcProvider(this.key, this.ydoc!, {
+      signaling: [],
     });
-
-    this.providers!.push(provider);
-
-    //
-
-    if (this.config.validateOnRemoteUpdate) {
-      this.ydoc!.on('update', (_: unknown, origin: unknown) => {
-        if (origin !== provider)
-          return;
-
-        this.validateRemoteUpdate();
-      });
-    }
   }
 }

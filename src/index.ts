@@ -1,5 +1,5 @@
 export type { State, Config, AnyState } from './state';
-export type { Storage, Slice, AnySlice, ApiMethods } from './types';
+export type { Storage, UpdateOrigin, Slice, AnySlice, ApiMethods } from './types';
 export type { SliceConfig } from './create-slice';
 
 export { createState } from './create-state';

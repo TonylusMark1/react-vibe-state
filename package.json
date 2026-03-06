@@ -1,6 +1,6 @@
 {
   "name": "react-vibe-state",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reactive state management with cross-tab sync and persistence powered by Valtio, Yjs, IndexedDB and BroadcastChannel",
   "keywords": [
     "state-management",

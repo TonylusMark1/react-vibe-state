@@ -51,7 +51,7 @@ export function createState<
 
       //
 
-      const consoleWarnHeader = `HMR, react-vibe-state, state "${config.name}":`;
+      const consoleWarnHeader = `HMR / react-vibe-state / state "${config.name}":`;
       const consoleWarnBody = `- State will use cached instance, config changes won't apply.`;
       const consoleWarnFooter = `- You may want to reload the page.`;
 

@@ -26,8 +26,6 @@ export const ChangeUserRole = React.memo(function ChangeUserRole() {
       return;
     
     GlobalState.actions.users.updateUser(selectedUserId, { role: newRole });
-    setSelectedUserId(null);
-    setNewRole('user');
   };
 
   //
@@ -59,15 +57,6 @@ export const ChangeUserRole = React.memo(function ChangeUserRole() {
           ))}
         </select>
       </div>
-      
-      {selectedUser && (
-        <div className={styles.userPreview}>
-          <span className={styles.previewName}>{selectedUser.name}</span>
-          <span className={`${styles.previewRole} ${styles[`role${selectedUser.role}`]}`}>
-            {selectedUser.role}
-          </span>
-        </div>
-      )}
       
       <div className={styles.field}>
         <label className={styles.label}>New Role</label>

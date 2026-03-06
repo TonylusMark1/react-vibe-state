@@ -1,8 +1,17 @@
+export type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+
+//
+
 /**
  * Supported storage backends for state persistence.
  * Currently only IndexedDB is supported, with potential for future extensions.
  */
 export type Storage = "indexed-db";
+
+/**
+ * Origin of an external update that triggered validation.
+ */
+export type UpdateOrigin = 'storage' | 'remote';
 
 //
 
@@ -45,10 +54,8 @@ export interface Slice<
   readonly actions: TActions;
   /** Optional validation function for storage/remote data */
   readonly validate?: (state: unknown) => boolean;
-  /** Callback when stored data fails validation */
-  readonly onStorageValidationFail?: (state: unknown) => void;
-  /** Callback when remote update fails validation */
-  readonly onRemoteUpdateValidationFail?: (state: unknown) => void;
+  /** Callback when an external update (storage or remote) fails validation */
+  readonly onUpdateValidationFail?: (state: unknown, origin: UpdateOrigin) => void;
 }
 
 /**

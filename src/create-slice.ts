@@ -20,10 +20,8 @@ export interface SliceConfig<
   actions?: TActions & ThisType<TState>;
   /** Optional validation function. Returns true if state structure is valid. */
   validate?: (state: unknown) => boolean;
-  /** Called when stored data fails validation (before falling back to initial state). */
-  onStorageValidationFail?: (state: unknown) => void;
-  /** Called when remote update fails validation (before throwing error). */
-  onRemoteUpdateValidationFail?: (state: unknown) => void;
+  /** Called when an external update (storage or remote) fails validation (before throwing error). */
+  onUpdateValidationFail?: (state: unknown, origin: Types.UpdateOrigin) => void;
 }
 
 //
@@ -72,7 +70,6 @@ export function createSlice<
     selectors: config.selectors ?? {} as TSelectors,
     actions: config.actions ?? {} as TActions,
     validate: config.validate,
-    onStorageValidationFail: config.onStorageValidationFail,
-    onRemoteUpdateValidationFail: config.onRemoteUpdateValidationFail,
+    onUpdateValidationFail: config.onUpdateValidationFail,
   };
 }

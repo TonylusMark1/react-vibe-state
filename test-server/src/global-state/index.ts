@@ -22,7 +22,7 @@ export default RVS.createState({
   persistAndSync: true,
 
   name: 'global-state',
-  generation: 'generation-1',
+  generation: 'gen-1',
 
   initial: {
     id: RandomWordSlugs.generateSlug(),

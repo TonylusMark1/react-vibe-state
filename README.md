@@ -93,12 +93,10 @@ const state = createState({
 | `actions`                      | `object`                     | `{}`           | Methods for mutations (`this` = mutable state)           |
 | `slices`                       | `{ [key]: Slice }`           | `{}`           | Object of slices created with `createSlice()`            |
 | `readyTimeout`                 | `number`                     | `5000`         | Max ms to wait for storage initialization                |
-| `validate`                     | `(state) => boolean`         | `null`         | Validation function for state structure                  |
-| `validateOnRemoteUpdate`       | `boolean`                    | `false`        | Validate state after cross-tab updates                   |
-| `onReady`                      | `() => void`                 | `null`         | Called when initialization completes                     |
-| `onError`                      | `(error) => void`            | `null`         | Called on initialization failure                         |
-| `onStorageValidationFail`      | `(state, sliceKey?) => void` | `null`         | Called when stored data fails validation                 |
-| `onRemoteUpdateValidationFail` | `(state, sliceKey?) => void` | `null`         | Called before throwing on invalid remote update          |
+| `validate`                     | `(state) => boolean`                          | `null`         | Validation function for state structure                  |
+| `onReady`                      | `() => void`                                  | `null`         | Called when initialization completes                     |
+| `onError`                      | `(error) => void`                             | `null`         | Called on initialization failure                         |
+| `onUpdateValidationFail`       | `(state, origin, sliceKey?) => void`          | `null`         | Called when storage or remote update fails validation    |
 
 
 #### Returned State Instance
@@ -169,9 +167,8 @@ appState.selectors.todos.filtered();
 | `initial`                      | `T \| () => T`       | *required*  | Initial slice state object or factory function   |
 | `selectors`                    | `object`             | `{}`        | Slice-scoped selectors (`this` = slice state)    |
 | `actions`                      | `object`             | `{}`        | Slice-scoped actions (`this` = slice state)      |
-| `validate`                     | `(state) => boolean` | `undefined` | Slice-specific validation                        |
-| `onStorageValidationFail`      | `(state) => void`    | `undefined` | Called when slice storage validation fails       |
-| `onRemoteUpdateValidationFail` | `(state) => void`    | `undefined` | Called when slice remote update validation fails |
+| `validate`                     | `(state) => boolean`                 | `undefined` | Slice-specific validation                                |
+| `onUpdateValidationFail`       | `(state, origin) => void`            | `undefined` | Called when slice storage or remote validation fails     |
 
 
 ### `useSnapshot(state)` / `useSnapshot(state, sliceKey)`
@@ -201,15 +198,14 @@ const appState = createState({
     return typeof state.version === 'number' && Array.isArray(state.data);
   },
   
-  validateOnRemoteUpdate: true,
-    
-  onStorageValidationFail: (invalidData) => {
-    console.warn('Stored data invalid, using initial state', JSON.stringify(invalidData));
-  },
-  
-  onRemoteUpdateValidationFail: () => {
-    // Remote tab sent incompatible data - probably has newer schema, try to reload the page to align
-    location.reload();
+  onUpdateValidationFail: (invalidData, origin) => {
+    if (origin === 'storage') {
+      console.warn('Stored data invalid', JSON.stringify(invalidData));
+    }
+    else {
+      // Storage / Remote data incompatible - probably has newer schema
+      location.reload();
+    }
   },
 });
 ```
@@ -217,8 +213,7 @@ const appState = createState({
 **Validation behavior:**
 
 - **Initial state** - if invalid then throws error (fix your code)
-- **Stored data** - if invalid then calls `onStorageValidationFail` & falls back to initial
-- **Remote updates** (`validateOnRemoteUpdate` must be `true`) - if invalid then calls `onRemoteUpdateValidationFail` & throws error
+- **Storage/remote updates** - if invalid then calls `onUpdateValidationFail` & throws error (always, when `validate` is set)
 
 ## Generation (Schema Versioning)
 
