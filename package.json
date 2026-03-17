@@ -1,6 +1,6 @@
 {
   "name": "react-vibe-state",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Reactive state management with cross-tab sync and persistence powered by Valtio, Yjs, IndexedDB and BroadcastChannel",
   "keywords": [
     "state-management",
@@ -57,11 +57,7 @@
     "react-scan": "^0.5.3",
     "tsup": "^8.5.1",
     "typescript": "^5.5.3",
-    "valtio": "^2.3.0",
     "vite": "^7.3.1",
-    "vite-tsconfig-paths": "^6.1.1",
-    "y-indexeddb": "^9.0.12",
-    "y-webrtc": "^10.3.0",
-    "yjs": "^13.6.29"
+    "vite-tsconfig-paths": "^6.1.1"
   }
 }
