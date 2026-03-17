@@ -14,7 +14,7 @@ export default defineConfig({
   tsconfig: './tsconfig.bundle.json',
   external: [
     'valtio',
-    'valtio-yjs',
+    'valtio-y',
     'yjs',
     'y-indexeddb',
     'y-webrtc',

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as Valtio from 'valtio';
-import * as ValtioYjs from 'valtio-yjs';
+import * as ValtioY from 'valtio-y';
 import * as Y from 'yjs';
 import * as YWebrtc from 'y-webrtc';
 
@@ -256,9 +256,16 @@ export class State<
       if (this.persistAndSync) {
         this.ydoc = new Y.Doc();
         this.ymap = this.ydoc.getMap('state');
-  
-        // In the future: createYjsProxy here instead of Valtio.proxy (valtio-yjs -> valtio-y)
-        return Valtio.proxy(this.buildEntireInitial());
+
+        const { proxy, bootstrap } = ValtioY.createYjsProxy(this.ydoc, {
+          getRoot: () => this.ymap!
+        });
+
+        // Set initial state synchronously so proxy is populated before first render.
+        // When storage loads later, data flows into Y.Doc and syncs to proxy.
+        bootstrap(this.buildEntireInitial());
+
+        return proxy as Types.InferStateFromSlices<TRootState, TSlices>;
       }
       else {
         return Valtio.proxy(this.buildEntireInitial());
@@ -291,12 +298,8 @@ export class State<
       // Register validation listener BEFORE loading from storage
       this.initUpdateValidation();
 
-      // Initialize storage.
-      // Load from storage - data flows into Y.Doc,
+      // Load from storage - data flows into Y.Doc, automatically syncs to proxy (already bound)
       await this.initStorage();
-
-      // Bind Valtio with Yjs - storage data syncs to proxy via initializeFromY
-      ValtioYjs.bind(this.state, this.ymap!);
 
       // Enable cross-tab sync - future updates validated with origin='remote'
       this.initSync();

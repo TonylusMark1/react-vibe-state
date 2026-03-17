@@ -15,7 +15,7 @@ Reactive state management with **automatic persistence** and **cross-tab synchro
 
 - [Valtio](https://github.com/pmndrs/valtio) - reactive proxy-based state
 - [Yjs](https://github.com/yjs/yjs) - CRDT for conflict-free merging
-- [valtio-yjs](https://github.com/dai-shi/valtio-yjs) - two-way binding between Valtio proxy and Yjs doc
+- [valtio-y](https://github.com/valtiojs/valtio-y) - two-way binding between Valtio proxy and Yjs doc
 - [y-indexeddb](https://github.com/yjs/y-indexeddb) - IndexedDB persistence provider
 - [y-webrtc](https://github.com/yjs/y-webrtc) - BroadcastChannel sync (WebRTC disabled)
 
@@ -106,7 +106,7 @@ const state = createState({
 
 | Property    | Type                        | Description                                                  |
 | ----------- | --------------------------- | ------------------------------------------------------------ |
-| `state`     | `TRootState & TSlices`      | Mutable proxy - read/write directly or via selectors/actions |
+| `state`     | `object`                    | Mutable proxy - read/write directly or via selectors/actions |
 | `selectors` | `object`                    | Bound selector methods (`this` = readonly state)             |
 | `actions`   | `object`                    | Bound action methods (`this` = mutable state)                |
 | `ready`     | `Promise<void>`             | Resolves when persistence is loaded                          |
@@ -244,11 +244,11 @@ interface User {
 
 interface UsersState {
   list: User[];
-  selectedId?: string;
+  selectedId: string | null;
 }
 
 const usersSlice = createSlice({
-  initial: { list: [], selectedId: undefined } as UsersState,
+  initial: { list: [], selectedId: null } as UsersState,
   selectors: {
     selected() {
       return this.list.find(u => u.id === this.selectedId);
@@ -261,7 +261,7 @@ const usersSlice = createSlice({
     add(user: User) {
       this.list.push(user);
     },
-    select(id: string | undefined) {
+    select(id: string | null) {
       this.selectedId = id;
     },
   },
@@ -282,6 +282,44 @@ appState.state.theme;                   // 'dark' | 'light'
 appState.state.users.list;              // User[]
 appState.selectors.users.selected();    // User | undefined
 appState.actions.users.add(user);       // add requires (user: User) => void
+```
+
+## Limitations
+
+When persistence is enabled (`persistAndSync: true`), state is synced via Yjs CRDT which has some constraints:
+
+- **No `undefined` values** - use `null` instead, or omit/delete the property
+- **No functions or class instances** - state must be JSON-serializable (primitives, objects, arrays)
+- **Truncating arrays** - use `array.splice(index)` or assign a new array instead of `array.length = N`
+
+```ts
+// Good
+const slice = createSlice({
+  initial: {
+    selectedId: null,        // use null instead of undefined
+    items: [],
+    count: 0,
+  },
+  actions: {
+    clearItems() {
+      this.items.splice(0);  // use splice to clear
+      // or: this.items = [];
+    },
+  },
+});
+
+// Bad - will throw error
+const slice = createSlice({
+  initial: {
+    selectedId: undefined,   // undefined not allowed
+    callback: () => {},      // functions not serializable
+  },
+  actions: {
+    clearItems() {
+      this.items.length = 0; // don't truncate via length
+    },
+  },
+});
 ```
 
 ## Browser Support

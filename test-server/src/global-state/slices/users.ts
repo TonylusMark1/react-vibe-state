@@ -9,7 +9,7 @@ export type ActiveTab = 'addUser' | 'changeRole';
 export interface Slice {
   map: Record<number, User>;
   nextId: number;
-  selectedUserId: number | undefined;
+  selectedUserId: number | null;
   activeTab: ActiveTab;
 }
 
@@ -32,7 +32,7 @@ export default RVS.createSlice({
   initial: (): Slice => ({
     map: {},
     nextId: 1,
-    selectedUserId: undefined,
+    selectedUserId: null,
     activeTab: 'addUser',
   }),
 
@@ -79,10 +79,10 @@ export default RVS.createSlice({
       delete this.map[id];
       
       if (this.selectedUserId === id)
-        this.selectedUserId = undefined;
+        this.selectedUserId = null;
     },
     
-    selectUser(id: number | undefined) {
+    selectUser(id: number | null) {
       this.selectedUserId = id;
     },
     
@@ -97,7 +97,7 @@ export default RVS.createSlice({
     
     clearUsers() {
       this.map = {};
-      this.selectedUserId = undefined;
+      this.selectedUserId = null;
       this.nextId = 1;
     },
     
