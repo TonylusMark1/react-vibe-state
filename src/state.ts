@@ -396,19 +396,21 @@ export class State<
 
     //
 
-    if (sliceKey) {
-      return {
-        state: (snap as any)[sliceKey],
-        selectors: (selectors as any)[sliceKey],
-        actions: (this.actions as any)[sliceKey],
-      };
-    }
+    return React.useMemo(() => {
+      if (sliceKey) {
+        return {
+          state: (snap as any)[sliceKey],
+          selectors: (selectors as any)[sliceKey],
+          actions: (this.actions as any)[sliceKey],
+        };
+      }
 
-    return {
-      state: snap,
-      selectors,
-      actions: this.actions,
-    };
+      return {
+        state: snap,
+        selectors,
+        actions: this.actions,
+      };
+    }, [sliceKey, snap, selectors, this.actions]);
   }
 
   /**
@@ -467,10 +469,10 @@ export class State<
   private validateName(): void {
     if (!this.config.name || !this.config.name.trim())
       throw new Error('State name cannot be empty');
-    
+
     if (this.config.name.includes(this.config.keySeparator))
       throw new Error(`State name cannot contain separator "${this.config.keySeparator}"`);
-    
+
     if (!/^[a-zA-Z0-9_-]+$/.test(this.config.name))
       throw new Error('State name can only contain letters, numbers, underscores and hyphens');
   }
